@@ -1,29 +1,62 @@
-# Lara
+<div align="center">
+  <img src="assets/lara-icon.svg" alt="Lara logo" width="112" height="112">
 
+  <h1>Lara</h1>
 
-It lets you:
+  <p><strong>Extract, edit, preview, and rebuild image assets inside Lottie animations.</strong></p>
 
-- Open and preview a Lottie JSON file.
-- Extract its embedded images.
+  <p>
+    <img src="https://img.shields.io/badge/Windows-supported-D94141?style=flat-square&amp;logo=windows&amp;logoColor=white" alt="Windows supported">
+    <img src="https://img.shields.io/badge/macOS-supported-D94141?style=flat-square&amp;logo=apple&amp;logoColor=white" alt="macOS supported">
+    <img src="https://img.shields.io/badge/Linux-supported-D94141?style=flat-square&amp;logo=linux&amp;logoColor=white" alt="Linux supported">
+    <img src="https://img.shields.io/badge/Python-3.9%2B-303030?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.9 or newer">
+  </p>
+</div>
 
-- Load the edited image folder.
-- Preview the updated animation.
-- Build a new, self-contained Lottie JSON file.
+Lara is a cross-platform desktop app for replacing embedded images in a Lottie JSON file without changing the animation's timing, layers, masks, or effects. It includes a live preview, playback controls, and a self-contained JSON export.
 
-keeps the original animation timing, layers, masks, and effects.
+## Features
 
-## Install and open Lara
+- Open a Lottie JSON file or drag it into the app.
+- Preview the animation and scrub through its timeline.
+- Extract every embedded image to an editable folder.
+- Reload a folder of edited assets or replace one image at a time.
+- Refresh the preview before exporting.
+- Build a new Lottie JSON with the edited images embedded.
+- Keep the source animation untouched.
+
+## Requirements
 
 - Python 3.9 or newer
-- Internet access during the first launch
+- An internet connection during the first launch
+- On Linux, Python's `venv` module (usually provided by `python3-venv`)
 
-Download or clone the Lara folder, then use the launcher for your operating system below.
+Lara creates a private `.venv` inside the project folder and installs PySide6 there. It does not modify your system Python.
 
-The first time you open Lara, it automatically creates a private `.venv` folder and installs the required packages. When installation finishes, Lara opens automatically. This can take a few minutes and requires an internet connection.
+## Quick start
 
-After Lara is installed, use the same launcher whenever you want to open it. Lara skips installation on later launches. It does not modify your system Python, and you do not need to open or run `run_lara.py` yourself.
+Download or clone this repository, then use the launcher for your operating system.
 
-## Linux
+### Windows
+
+Double-click **`lara.cmd`**, or run it from Command Prompt:
+
+```bat
+lara.cmd
+```
+
+If Python is missing, install it from [python.org](https://www.python.org/downloads/) and enable **Add Python to PATH** during setup.
+
+### macOS
+
+Double-click **`Lara.command`**. If macOS does not allow it to run yet, open Terminal in the Lara folder and use:
+
+```bash
+chmod +x Lara.command lara
+./Lara.command
+```
+
+### Linux
 
 Open a terminal in the Lara folder and run:
 
@@ -32,45 +65,67 @@ chmod +x lara
 ./lara
 ```
 
-## Windows
-
-Double-click `lara.cmd`. The first launch installs the required packages and then opens Lara.
-
-```text
-lara.cmd
-```
-
-If Windows asks which Python to use, install Python from [python.org](https://www.python.org/downloads/) and enable **Add Python to PATH** during installation.
-
-## macOS
-
-Double-click `Lara.command`. The first launch installs the required packages and then opens Lara.
-
-```text
-Lara.command
-```
-
-Or open Terminal in the Lara folder and run:
+On Ubuntu or Debian, install `venv` first if your Python installation does not include it:
 
 ```bash
-chmod +x Lara.command lara
-./lara
+sudo apt update
+sudo apt install python3-venv
 ```
 
-## How to use Lara
+The first launch can take a few minutes while Lara creates its environment and installs the GUI dependencies. Later launches reuse that environment and open immediately.
 
-1. Click **Open JSON** or drop a Lottie JSON into the preview.
-2. Click **Extract** and choose where to create the assets folder.
-3. Edit the extracted images. Keep their filenames and canvas sizes.
-4. Click **Load folder** and choose the folder containing the edited images.
-5. Click **Refresh** to preview the changes.
-6. Click **Build JSON** and choose where to save the finished animation.
+## Editing a Lottie animation
 
-Use **Replace** to replace one selected image. Use **Reset** to unload everything and start with another JSON file.
+1. Select **Open JSON**, or drop a Lottie `.json` file into the preview.
+2. Select **Extract** and choose a destination for the asset folder.
+3. Edit the extracted images while keeping their filenames and canvas sizes.
+4. Select **Load folder** and choose the folder containing the edited images.
+5. Select **Refresh** to inspect the updated animation.
+6. Choose an output filename and select **Build JSON**.
 
-## Notes
+Double-click an asset row, or use **Replace**, to change a single image. Use **Reset** to unload the current animation and start again.
 
-- Each animation may have a different filename and different image assets.
-- Lara matches edited images using their Lottie asset IDs and extracted filenames.
-- The built JSON embeds the edited images, so no separate assets folder is required for playback.
-- To reinstall the environment, delete the `.venv` folder and start Lara again.
+## Project files
+
+| File | Purpose |
+| --- | --- |
+| `lara.py` | The desktop application and user interface. |
+| `run_lara.py` | Creates the private environment, installs dependencies, and starts the app. |
+| `lara`, `lara.cmd`, `Lara.command` | Linux, Windows, and macOS launchers. |
+| `extract_lottie_images.py` | Standalone command-line extractor and optional frame/GIF renderer. |
+
+Most users should start Lara through their operating-system launcher rather than running the Python files directly.
+
+## Command-line extractor
+
+The repository also includes a CLI for extraction and rendering:
+
+```bash
+python -m pip install -e .
+extract-lottie-images animation.json
+```
+
+Useful options include:
+
+```text
+--anim          Write an animation.json that references the extracted files
+--frames        Render a PNG frame sequence
+--gif           Render an animated GIF
+--every N       Capture every Nth frame
+--scale VALUE   Set the render scale
+```
+
+Frame and GIF rendering require the optional render dependencies:
+
+```bash
+python -m pip install -e ".[render]"
+```
+
+## Troubleshooting
+
+- **Lara cannot find Python:** install Python 3.9 or newer, then start the launcher again.
+- **Linux reports missing `venv` or `pip`:** install your distribution's `python3-venv` package.
+- **First-time setup was interrupted:** remove the local `.venv` folder and relaunch Lara.
+- **An edited image is not detected:** preserve the extracted filename; Lara matches replacements by Lottie asset ID and filename.
+
+The exported JSON embeds the replacement images, so it does not need a separate asset folder for playback.
