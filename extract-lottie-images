@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# macOS / Linux CLI wrapper for extract_lottie_images.py
+# Usage: ./extract-lottie-images giftbox.json
+#        ./extract-lottie-images path/to/anim.json -o my-assets
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$SCRIPT_DIR/extract_lottie_images.py" "$@"
+elif command -v python >/dev/null 2>&1; then
+  exec python "$SCRIPT_DIR/extract_lottie_images.py" "$@"
+fi
+
+echo "Python 3 was not found. Install it (e.g. brew install python) and retry." >&2
+exit 1

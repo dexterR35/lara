@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Linux and macOS launcher. Creates .venv and installs dependencies on first run.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$SCRIPT_DIR/run_lara.py" "$@"
+elif command -v python >/dev/null 2>&1; then
+  exec python "$SCRIPT_DIR/run_lara.py" "$@"
+fi
+
+echo "Python 3.9 or newer was not found." >&2
+echo "Install Python from https://www.python.org/downloads/ and try again." >&2
+exit 1

@@ -1,0 +1,3 @@
+[console_scripts]
+extract-lottie-images = extract_lottie_images:main
+lara = lara:main

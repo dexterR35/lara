@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "extract-lottie-images"
+version = "1.1.0"
+description = "CLI to extract images and animation from Lottie JSON files"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+render = ["playwright>=1.40", "Pillow>=10"]
+gui = ["PySide6>=6.7"]
+
+[project.scripts]
+extract-lottie-images = "extract_lottie_images:main"
+lara = "lara:main"
+
+[tool.setuptools]
+py-modules = ["extract_lottie_images", "lara"]
