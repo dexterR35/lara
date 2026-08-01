@@ -1,21 +1,40 @@
-import { Link, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { HelpCircle, RotateCcw } from 'lucide-react'
 import Editor from './pages/Editor'
 import Help from './pages/Help'
 import { WorkspaceProvider, useWorkspace } from './state/WorkspaceContext'
 import Button from './components/Button'
 
+const views = { '/editor': Editor, '/help': Help }
+
+function useHashView() {
+  const read = () => window.location.hash.slice(1) || '/editor'
+  const [path, setPath] = useState(read)
+  useEffect(() => {
+    const changed = () => {
+      const next = read()
+      if (views[next]) setPath(next)
+      else window.location.replace('#/editor')
+    }
+    window.addEventListener('hashchange', changed)
+    changed()
+    return () => window.removeEventListener('hashchange', changed)
+  }, [])
+  return views[path] || Editor
+}
+
+function Outlet({ view: View }) { return <View/> }
+
 function Layout() {
-  const { reset, source } = useWorkspace()
+  const { reset, source, storageState } = useWorkspace()
+  const View = useHashView()
   return <div className="app-shell">
     <header className="topbar">
-      <Link className="brand" to="/editor" aria-label="Lara home"><img src="/lara-icon.svg" alt=""/><span>Lara</span><span className="brand-tag">Lottie studio</span></Link>
-      <div className="topbar-actions"><span className="session-badge"><span/> Session saved</span><Link className="icon-link" to="/help" title="Help"><HelpCircle size={18}/></Link><Button variant="ghost" icon={RotateCcw} disabled={!source} onClick={reset}>Reset</Button></div>
+      <a className="brand" href="#/editor" aria-label="Lara home"><img src="/lara-icon.svg" alt=""/><span>Lara</span><span className="brand-tag">Lottie studio</span></a>
+      <div className="topbar-actions"><span className={`session-badge session-${storageState}`}><span/> {storageState === 'saved' ? 'Session saved' : 'Memory only'}</span><a className="icon-link" href="#/help" title="Help" aria-label="Open help"><HelpCircle size={18}/></a><Button variant="ghost" icon={RotateCcw} disabled={!source} onClick={reset}>Reset</Button></div>
     </header>
-    <main className="app-main"><Outlet/></main>
+    <main className="app-main"><Outlet view={View}/></main>
   </div>
 }
 
-export default function App() {
-  return <WorkspaceProvider><Routes><Route element={<Layout/>}><Route index element={<Navigate to="/editor" replace/>}/><Route path="/editor" element={<Editor/>}/><Route path="/help" element={<Help/>}/><Route path="*" element={<Navigate to="/editor" replace/>}/></Route></Routes></WorkspaceProvider>
-}
+export default function App() { return <WorkspaceProvider><Layout/></WorkspaceProvider> }

@@ -1,6 +1,11 @@
 import { ArrowLeft, Archive, Images, ShieldCheck } from 'lucide-react'
-import { Link } from 'react-router-dom'
+
+const topics = [
+  { icon: Images, title: '1. Open & replace', copy: 'Drop a Lottie JSON, choose an asset, then upload its replacement. Batch filenames should begin with the Lottie asset ID.' },
+  { icon: ShieldCheck, title: '2. Preview privately', copy: 'Everything runs in this tab. The workspace survives refresh through session storage and clears when the tab session closes or Reset is pressed.' },
+  { icon: Archive, title: '3. Build & export', copy: 'Download a self-contained rebuilt JSON, or export a ZIP containing the JSON, image files, and a generated manifest.' },
+]
 
 export default function Help() {
-  return <div className="help-page"><Link className="back-link" to="/editor"><ArrowLeft size={16}/> Back to editor</Link><p className="eyebrow">Lara guide</p><h1>Edit Lottie image assets without a backend.</h1><div className="help-grid"><article className="panel"><Images/><h2>1. Open & replace</h2><p>Drop a Lottie JSON, choose an asset, then upload its replacement. For batch work, filenames should begin with the Lottie asset ID.</p></article><article className="panel"><ShieldCheck/><h2>2. Preview privately</h2><p>Everything runs in this tab. Your workspace survives refresh through session storage and is removed when the tab session closes or you press Reset.</p></article><article className="panel"><Archive/><h2>3. Build & export</h2><p>Download a self-contained rebuilt JSON, or export a ZIP containing the JSON, image files, and a manifest.</p></article></div></div>
+  return <div className="help-page"><a className="back-link" href="#/editor"><ArrowLeft size={16}/>Back to editor</a><p className="eyebrow">Lara guide</p><h1>Edit Lottie image assets without a backend.</h1><div className="help-grid">{topics.map(({ icon: Icon, title, copy }) => <article className="panel" key={title}><Icon/><h2>{title}</h2><p>{copy}</p></article>)}</div></div>
 }

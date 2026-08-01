@@ -31,7 +31,7 @@ The workspace uses `sessionStorage`. It survives refreshes in the same tab, but 
 ## Stack
 
 - Vite + React (JavaScript)
-- React Router layout/outlet structure
+- Lightweight native hash views with reusable layout/outlet structure
 - Tailwind CSS with semantic component classes through `@apply`
 - `lottie-web` preview
 - JSZip client-side packaging
