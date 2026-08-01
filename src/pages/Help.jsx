@@ -1,9 +1,9 @@
 import { ArrowLeft, Archive, Images, ShieldCheck } from 'lucide-react'
 
 const topics = [
-  { icon: Images, title: '1. Open & replace', copy: 'Drop a Lottie JSON, choose an asset, then upload its replacement. Batch filenames should begin with the Lottie asset ID.' },
+  { icon: Images, title: '1. Open, extract & replace', copy: 'Drop a Lottie JSON or dotLottie file, choose an embedded image to download, or upload a replacement. Batch filenames should begin with the Lottie asset ID.' },
   { icon: ShieldCheck, title: '2. Preview privately', copy: 'Everything runs in this tab. The workspace survives refresh through session storage and clears when the tab session closes or Reset is pressed.' },
-  { icon: Archive, title: '3. Build & export', copy: 'Download a self-contained rebuilt JSON, or export a ZIP containing the JSON, image files, and a generated manifest.' },
+  { icon: Archive, title: '3. Build & export', copy: 'Download a rebuilt JSON, or export all embedded images in a ZIP with image metadata and referenced font details.' },
 ]
 
 export default function Help() {

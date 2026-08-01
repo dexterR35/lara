@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Check, Search, Trash2, Upload } from 'lucide-react'
-import { assetSource, expectedFilename, formatBytes, imageAssets, refsByAsset } from '../lib/lottie'
+import { Check, Download, Search, Trash2, Upload } from 'lucide-react'
+import { assetSource, dataUrlToBlob, expectedFilename, formatBytes, imageAssets, refsByAsset } from '../lib/lottie'
 import { useWorkspace } from '../state/WorkspaceContext'
 import AssetThumbnail from './AssetThumbnail'
 import Button from './Button'
@@ -32,11 +32,25 @@ export default function AssetList() {
     } catch (error) { notify(error.message, 'error') }
   }
 
+  const downloadSelected = () => {
+    const payload = replacements[selectedId]?.dataUrl || selected?.p
+    if (!selected || !String(payload).startsWith('data:image')) return
+    try {
+      const url = URL.createObjectURL(dataUrlToBlob(payload))
+      const anchor = Object.assign(document.createElement('a'), { href: url, download: replacements[selectedId]?.name || expectedFilename(selected) })
+      document.body.append(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      notify(`${selected.id} downloaded`, 'success')
+    } catch (error) { notify(error.message, 'error') }
+  }
+
   return <section className="asset-panel panel" aria-label="Animation assets">
     <div className="panel-heading"><div><p className="eyebrow">Assets</p><h2>{assets.length} images</h2></div><span className="count-pill">{Object.keys(replacements).length} edited</span></div>
     <label className="search-field"><Search size={16} aria-hidden="true"/><span className="sr-only">Search assets</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search assets or layers"/></label>
     <div className="asset-list" role="list">{filtered.map((asset) => <AssetRow key={asset.id} asset={asset} layerNames={refs[asset.id] || []} replacement={replacements[asset.id]} selected={selectedId === asset.id} onSelect={() => setSelectedId(asset.id)}/>)}{!filtered.length && <div className="empty-list">{assets.length ? `No assets match “${query}”.` : 'This animation has no image assets.'}</div>}</div>
-    <div className="asset-actions"><FilePicker icon={Upload} accept="image/*,.svg" disabled={!selected} onFiles={choose}>Replace selected</FilePicker><Button variant="ghost" icon={Trash2} disabled={!replacements[selectedId]} onClick={() => removeReplacement(selectedId)}>Restore</Button></div>
+    <div className="asset-actions"><Button icon={Download} disabled={!selected || !String(replacements[selectedId]?.dataUrl || selected?.p).startsWith('data:image')} onClick={downloadSelected}>Download selected</Button><FilePicker icon={Upload} accept="image/*,.svg" disabled={!selected} onFiles={choose}>Replace selected</FilePicker><Button variant="ghost" icon={Trash2} disabled={!replacements[selectedId]} onClick={() => removeReplacement(selectedId)}>Restore</Button></div>
     {selected && <p className="selected-info">Selected <strong>{expectedFilename(selected)}</strong>{replacements[selected.id] && ` · ${formatBytes(replacements[selected.id].size)}`}</p>}
   </section>
 }

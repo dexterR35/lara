@@ -52,7 +52,7 @@ export default function Editor() {
     <div className="workspace-summary">
       <div className="file-identity"><span className="file-icon"><FileJson size={20} aria-hidden="true"/></span><div><p title={sourceName}>{sourceName}</p><span>{source.w} × {source.h} · {stats.fps || '?'} fps · {stats.duration.toFixed(1)} sec</span></div></div>
       <div className="summary-stats"><span><strong>{stats.assets}</strong> assets</span><span><strong>{stats.changes}</strong> changes</span></div>
-      <FilePicker icon={Upload} accept=".json,application/json" onFiles={(file) => loadJsonFile(file).catch((error) => notify(error.message, 'error'))}>Open another</FilePicker>
+      <FilePicker icon={Upload} accept=".json,.lottie,application/json,application/zip" onFiles={(file) => loadJsonFile(file).catch((error) => notify(error.message, 'error'))}>Open another</FilePicker>
     </div>
     <div className="editor-grid"><AssetList/><Preview/></div>
     <ExportCard/>

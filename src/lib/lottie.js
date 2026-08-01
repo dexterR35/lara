@@ -1,4 +1,7 @@
+import JSZip from 'jszip'
+
 const IMAGE_EXTENSION = /\.(png|jpe?g|webp|gif|svg)$/i
+export const MAX_LOTTIE_FILE_SIZE = 10 * 1024 * 1024
 
 export function validateLottie(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('This JSON is not a Lottie animation.')
@@ -16,7 +19,60 @@ export function parseLottieJson(text) {
   }
 }
 
+export async function parseLottieFile(file) {
+  if (!file) throw new Error('Choose a Lottie JSON or .lottie file.')
+  if (file.size > MAX_LOTTIE_FILE_SIZE) throw new Error('The selected file is larger than 10 MB.')
+
+  if (!String(file.name || '').toLowerCase().endsWith('.lottie')) {
+    return parseLottieJson(await file.text())
+  }
+
+  let zip
+  try { zip = await JSZip.loadAsync(await file.arrayBuffer()) }
+  catch { throw new Error('The selected .lottie file is not a valid dotLottie archive.') }
+
+  const jsonEntries = Object.values(zip.files).filter((entry) => !entry.dir && /(^|\/)animations\/.*\.json$/i.test(entry.name))
+  if (!jsonEntries.length) throw new Error('The .lottie archive does not contain an animation JSON file.')
+
+  let preferredId = ''
+  const manifestEntry = zip.file('manifest.json')
+  if (manifestEntry) {
+    try {
+      const manifest = JSON.parse(await manifestEntry.async('string'))
+      preferredId = manifest.initial?.animation || manifest.activeAnimationId || manifest.animations?.[0]?.id || ''
+    } catch { /* Fall back to the first animation. */ }
+  }
+  const preferred = jsonEntries.find((entry) => entry.name.toLowerCase().endsWith(`animations/${preferredId.toLowerCase()}.json`))
+  const data = parseLottieJson(await (preferred || jsonEntries[0]).async('string'))
+
+  await Promise.all(imageAssets(data).map(async (asset) => {
+    if (/^data:image\//i.test(String(asset.p))) return
+    const relativePath = `${asset.u || ''}${asset.p || ''}`.replace(/^\.\//, '').replace(/^\//, '')
+    const entry = zip.file(relativePath) || zip.file(`images/${String(asset.p || '').replace(/^\//, '')}`)
+    if (!entry) return
+    const extension = extensionForAsset(asset)
+    const mime = extension === 'svg' ? 'image/svg+xml'
+      : extension === 'jpg' ? 'image/jpeg'
+        : `image/${extension}`
+    asset.p = `data:${mime};base64,${await entry.async('base64')}`
+    asset.u = ''
+    asset.e = 1
+  }))
+  return data
+}
+
 export const imageAssets = (data) => (data?.assets || []).filter((asset) => asset && !Array.isArray(asset.layers) && asset.p)
+export const embeddedImageAssets = (data) => imageAssets(data).filter((asset) => /^data:image\//i.test(String(asset.p)))
+
+export function fontReferences(data) {
+  const fonts = Array.isArray(data?.fonts?.list) ? data.fonts.list : []
+  return fonts.map((font, index) => ({
+    id: font.fName || font.fFamily || `font-${index + 1}`,
+    family: font.fFamily || font.fName || 'Unknown family',
+    style: font.fStyle || 'Regular',
+    path: font.fPath || '',
+  }))
+}
 export const isImageFile = (file) => Boolean(file) && (file.type?.startsWith('image/') || IMAGE_EXTENSION.test(file.name || ''))
 
 export function refsByAsset(data) {
@@ -94,7 +150,7 @@ export function dataUrlToBlob(dataUrl) {
 }
 
 export function safeBaseName(name, fallback = 'animation') {
-  return String(name || fallback).replace(/\.json$/i, '').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback
+  return String(name || fallback).replace(/\.(json|lottie)$/i, '').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback
 }
 
 export function formatBytes(bytes = 0) {

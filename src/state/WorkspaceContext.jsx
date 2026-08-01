@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { fileToDataUrl, imageAssets, isImageFile, matchAssetFiles, mergedLottie, parseLottieJson, validateLottie } from '../lib/lottie'
+import { fileToDataUrl, imageAssets, isImageFile, matchAssetFiles, mergedLottie, parseLottieFile, validateLottie } from '../lib/lottie'
 
 export const WORKSPACE_STORAGE_KEY = 'lara.workspace.v2'
 const WorkspaceContext = createContext(null)
@@ -43,7 +43,7 @@ export function WorkspaceProvider({ children }) {
 
   const loadJsonFile = useCallback(async (file) => {
     if (!file) return
-    const data = parseLottieJson(await file.text())
+    const data = await parseLottieFile(file)
     setSource(data)
     setSourceName(file.name)
     setReplacements({})

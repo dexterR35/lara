@@ -4,7 +4,7 @@
   <p><strong>A private, browser-only Lottie image asset studio.</strong></p>
 </div>
 
-Lara opens Lottie JSON files, previews animations, replaces embedded images individually or in batches, and exports rebuilt animations—without a server or Python.
+Lara opens Lottie JSON and dotLottie files, extracts embedded images, inventories font references, previews animations, replaces images individually or in batches, and exports rebuilt animations-without a server.
 
 ## Run locally
 
@@ -17,10 +17,10 @@ Create a production build with `npm run build`. The generated `dist/` directory 
 
 ## Workflow
 
-1. Open or drop a Lottie `.json` file.
-2. Select an image asset and replace it, or load a folder for batch matching.
+1. Open or drop a Lottie `.json` or `.lottie` file up to 10 MB.
+2. Select an embedded image to download it, replace it, or load a folder for batch matching.
 3. Preview the result and use the playback controls.
-4. Download the rebuilt JSON or a ZIP with the JSON, assets, and manifest.
+4. Download the rebuilt JSON or an asset ZIP with images, image metadata, and font references.
 
 Batch filenames should equal the asset ID or begin with `assetId_`. Extracted-style names such as `image_0_512x512.png` match automatically.
 

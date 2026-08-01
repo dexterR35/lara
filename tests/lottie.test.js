@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { dataUrlToBlob, matchAssetFiles, parseLottieJson, safeBaseName } from '../src/lib/lottie.js'
+import JSZip from 'jszip'
+import { dataUrlToBlob, embeddedImageAssets, fontReferences, matchAssetFiles, parseLottieFile, parseLottieJson, safeBaseName } from '../src/lib/lottie.js'
 
 const minimal = { v: '5.12.0', w: 200, h: 100, fr: 30, ip: 0, op: 60, layers: [] }
 
@@ -35,5 +36,30 @@ test('exports percent-encoded SVG data URLs', async () => {
 
 test('creates filesystem-safe export names', () => {
   assert.equal(safeBaseName('My animation (final).json'), 'My-animation-final')
+  assert.equal(safeBaseName('My animation.lottie'), 'My-animation')
   assert.equal(safeBaseName('///'), 'animation')
+})
+
+test('reads dotLottie animations and embeds their archived images for extraction', async () => {
+  const zip = new JSZip()
+  zip.file('manifest.json', JSON.stringify({ initial: { animation: 'main' }, animations: [{ id: 'main' }] }))
+  zip.file('animations/main.json', JSON.stringify({ ...minimal, assets: [{ id: 'image_0', u: 'images/', p: 'photo.png', w: 1, h: 1 }] }))
+  zip.file('images/photo.png', Uint8Array.from([137, 80, 78, 71]))
+  const buffer = await zip.generateAsync({ type: 'uint8array' })
+  const file = { name: 'sample.lottie', size: buffer.byteLength, arrayBuffer: async () => buffer.buffer }
+  const parsed = await parseLottieFile(file)
+
+  assert.equal(embeddedImageAssets(parsed).length, 1)
+  assert.match(parsed.assets[0].p, /^data:image\/png;base64,/)
+})
+
+test('lists Lottie font family and style references', () => {
+  assert.deepEqual(fontReferences({ fonts: { list: [{ fName: 'Inter-Bold', fFamily: 'Inter', fStyle: 'Bold' }] } }), [
+    { id: 'Inter-Bold', family: 'Inter', style: 'Bold', path: '' },
+  ])
+})
+
+test('rejects Lottie files larger than 10 MB', async () => {
+  const file = { name: 'large.json', size: 10 * 1024 * 1024 + 1, text: async () => '' }
+  await assert.rejects(parseLottieFile(file), /larger than 10 MB/)
 })
