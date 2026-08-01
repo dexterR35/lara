@@ -2,6 +2,7 @@ import { useState } from 'react'
 import JSZip from 'jszip'
 import { Archive, Download, FolderInput, LoaderCircle } from 'lucide-react'
 import { dataUrlToBlob, embeddedImageAssets, expectedFilename, fontReferences, safeBaseName } from '../lib/lottie'
+import { useConfirm } from '../state/ConfirmContext'
 import { useWorkspace } from '../state/WorkspaceContext'
 import Button from './Button'
 import FilePicker from './FilePicker'
@@ -17,16 +18,22 @@ function download(blob, name) {
 
 export default function ExportCard() {
   const { source, sourceName, merged, replacements, applyBatch, notify } = useWorkspace()
+  const ask = useConfirm()
   const [busy, setBusy] = useState(false)
   const base = safeBaseName(sourceName)
   const fonts = fontReferences(source)
+  const imageCount = embeddedImageAssets(source).length
 
   const batch = async (files) => {
     try { await applyBatch(files) }
     catch (error) { notify(error.message, 'error') }
   }
 
-  const downloadJson = () => {
+  const downloadJson = async () => {
+    if (!(await ask({
+      title: 'Build JSON?',
+      message: `Download ${base}-rebuilt.json with your current asset replacements.`,
+    }))) return
     try {
       download(new Blob([JSON.stringify(merged)], { type: 'application/json' }), `${base}-rebuilt.json`)
       notify('Rebuilt JSON downloaded', 'success')
@@ -35,6 +42,10 @@ export default function ExportCard() {
 
   const exportZip = async () => {
     if (busy) return
+    if (!(await ask({
+      title: 'Download all assets?',
+      message: `Package ${imageCount} embedded images and the rebuilt JSON into ${base}-assets.zip.`,
+    }))) return
     setBusy(true)
     try {
       const zip = new JSZip()
@@ -57,7 +68,11 @@ export default function ExportCard() {
   }
 
   return <section className="export-card panel">
-    <div className="export-copy"><p className="eyebrow">Assets & export</p><h2>Download or rebuild</h2><p>{embeddedImageAssets(source).length} embedded images · {fonts.length} font references{fonts.length ? ` · ${fonts.map((font) => `${font.family} ${font.style}`).join(', ')}` : ''}</p></div>
-    <div className="export-actions"><FilePicker icon={FolderInput} accept="image/*,.svg" directory onFiles={batch}>Load image folder</FilePicker><Button icon={Download} disabled={busy} onClick={downloadJson}>Build JSON</Button><Button variant="primary" className={busy ? 'is-loading' : ''} icon={busy ? LoaderCircle : Archive} disabled={busy || !embeddedImageAssets(source).length} onClick={exportZip}>{busy ? 'Packaging…' : 'Download all assets'}</Button></div>
+    <div className="export-copy"><p className="eyebrow">Assets & export</p><h2>Download or rebuild</h2><p>{imageCount} embedded images · {fonts.length} font references{fonts.length ? ` · ${fonts.map((font) => `${font.family} ${font.style}`).join(', ')}` : ''}</p></div>
+    <div className="export-actions">
+      <FilePicker icon={FolderInput} accept="image/*,.svg" directory onFiles={batch}>Load image folder</FilePicker>
+      <Button icon={Download} disabled={busy} onClick={downloadJson}>Build JSON</Button>
+      <Button variant="primary" className={busy ? 'is-loading' : ''} icon={busy ? LoaderCircle : Archive} disabled={busy || !imageCount} onClick={exportZip}>{busy ? 'Packaging…' : 'Download all assets'}</Button>
+    </div>
   </section>
 }

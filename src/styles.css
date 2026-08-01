@@ -40,12 +40,7 @@
   --color-checker-dark: #101014;
   --color-canvas-dot: #27272c;
 
-  /* Shadows */
-  --shadow-panel: 0 24px 80px color-mix(in srgb, var(--color-black) 32%, transparent);
-  --shadow-primary: 0 8px 24px color-mix(in srgb, var(--color-primary) 20%, transparent);
-  --shadow-success: 0 0 9px color-mix(in srgb, var(--color-success) 70%, transparent);
-  --shadow-warning: 0 0 9px color-mix(in srgb, var(--color-warning) 70%, transparent);
-  --shadow-selection: inset 2px 0 0 var(--color-primary);
+  /* Preview only */
   --shadow-artboard: 0 18px 70px color-mix(in srgb, var(--color-black) 35%, transparent), 0 0 0 1px color-mix(in srgb, var(--color-white) 16%, transparent);
 }
 
@@ -68,23 +63,23 @@
   .brand-tag { @apply hidden border-l pl-3 text-xs font-medium sm:block; border-color: var(--color-line); color: var(--color-muted); }
   .topbar-actions { @apply flex items-center gap-2; }
   .session-badge { @apply mr-2 hidden items-center gap-2 text-xs md:flex; color: var(--color-muted); }
-  .session-badge span, .privacy-note span, .status-live span { @apply h-1.5 w-1.5 rounded-full; background-color: var(--color-success); box-shadow: var(--shadow-success); }
+  .session-badge span, .privacy-note span, .status-live span { @apply h-1.5 w-1.5 rounded-full; background-color: var(--color-success); }
   .session-memory-only { color: var(--color-warning); }
-  .session-memory-only span { background-color: var(--color-warning); box-shadow: var(--shadow-warning); }
+  .session-memory-only span { background-color: var(--color-warning); }
   .icon-link { @apply grid h-9 w-9 place-items-center rounded-lg transition; color: var(--color-muted); }
   .icon-link:hover { background-color: color-mix(in srgb, var(--color-white) 5%, transparent); color: var(--color-white); }
-  .app-main { @apply mx-auto min-h-0 w-full max-w-[1560px] flex-1 overflow-hidden px-4 py-4 md:px-7 md:py-5; }
+  .app-main { @apply mx-auto flex min-h-0 w-full max-w-[1560px] flex-1 flex-col overflow-hidden px-4 py-4 md:px-7 md:py-5; }
   .button { @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3.5 text-xs font-semibold transition disabled:pointer-events-none disabled:opacity-40; border-color: var(--color-line); background-color: var(--color-neutral-900); color: var(--color-neutral-200); }
   .button:hover { border-color: var(--color-neutral-600); background-color: var(--color-neutral-800); }
-  .button-primary { border-color: var(--color-primary); background-color: var(--color-primary); color: var(--color-white); box-shadow: var(--shadow-primary); }
+  .button-primary { border-color: var(--color-primary); background-color: var(--color-primary); color: var(--color-white); }
   .button-primary:hover { border-color: var(--color-primary-soft); background-color: var(--color-primary-hover); }
   .button-ghost { border-color: transparent; background-color: transparent; color: var(--color-muted); }
   .button-ghost:hover { border-color: var(--color-line); }
   .button-icon { @apply h-9 w-9 p-0; }
-  .panel { @apply rounded-xl border; border-color: var(--color-line); background-color: var(--color-panel); box-shadow: var(--shadow-panel); }
+  .panel { @apply rounded-xl border; border-color: var(--color-line); background-color: var(--color-panel); }
   .eyebrow { @apply m-0 text-[10px] font-bold uppercase tracking-[.16em]; color: var(--color-muted); }
 
-  .welcome-dropzone { @apply mx-auto flex h-full max-w-[840px] flex-col items-center justify-center rounded-2xl border border-dashed px-6 text-center transition; border-color: var(--color-neutral-700); background-color: color-mix(in srgb, var(--color-panel) 80%, transparent); }
+  .welcome-dropzone { @apply mx-auto flex h-full min-h-0 w-full max-w-[840px] flex-1 flex-col items-center justify-center rounded-2xl border border-dashed px-6 text-center transition; border-color: var(--color-neutral-700); background-color: color-mix(in srgb, var(--color-panel) 80%, transparent); }
   .welcome-dropzone.is-dragging { @apply scale-[1.01]; border-color: var(--color-primary); background-color: color-mix(in srgb, var(--color-primary-hover) 5%, transparent); }
   .welcome-icon { @apply mb-7 grid h-14 w-14 place-items-center rounded-2xl border; border-color: color-mix(in srgb, var(--color-primary-soft) 30%, transparent); background-color: color-mix(in srgb, var(--color-primary-hover) 10%, transparent); color: var(--color-primary-soft); }
   .welcome-dropzone h1 { @apply mb-4 mt-3 text-4xl font-bold leading-[1.08] tracking-[-.045em] md:text-6xl; color: var(--color-white); }
@@ -94,8 +89,8 @@
   .welcome-actions > span { @apply flex items-center gap-2 text-xs; color: var(--color-muted); }
   .privacy-note { @apply mt-12 flex items-center gap-2 text-xs; color: var(--color-neutral-500); }
 
-  .workspace { @apply relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3; }
-  .workspace-summary { @apply flex flex-wrap items-center gap-4 rounded-xl border px-4 py-2.5; border-color: var(--color-line); background-color: var(--color-panel); }
+  .workspace { @apply relative flex min-h-0 flex-1 flex-col gap-3; }
+  .workspace-summary { @apply flex shrink-0 flex-wrap items-center gap-4 rounded-xl border px-4 py-2.5; border-color: var(--color-line); background-color: var(--color-panel); }
   .file-identity { @apply flex min-w-0 flex-1 items-center gap-3; }
   .file-icon { @apply grid h-10 w-10 shrink-0 place-items-center rounded-lg; background-color: color-mix(in srgb, var(--color-primary-hover) 10%, transparent); color: var(--color-primary-soft); }
   .file-identity p { @apply m-0 truncate text-sm font-semibold; color: var(--color-white); }
@@ -104,7 +99,7 @@
   .summary-stats > :not([hidden]) ~ :not([hidden]) { border-color: var(--color-line); }
   .summary-stats span { @apply px-4; }
   .summary-stats strong { @apply mr-1; color: var(--color-neutral-200); }
-  .editor-grid { @apply grid min-h-0 gap-3 lg:grid-cols-[390px_minmax(0,1fr)]; }
+  .editor-grid { @apply grid min-h-0 flex-1 gap-3 lg:grid-cols-[390px_minmax(0,1fr)]; }
 
   .asset-panel, .preview-panel { @apply flex min-h-0 flex-col overflow-hidden; }
   .panel-heading, .preview-heading { @apply flex items-center justify-between border-b px-4 py-4; border-color: var(--color-line); }
@@ -117,7 +112,7 @@
   .asset-list { @apply min-h-0 flex-1 overscroll-contain overflow-y-auto border-y; border-color: var(--color-line); scrollbar-color: var(--color-neutral-700) transparent; }
   .asset-row { @apply grid w-full grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-2.5 text-left transition; border-color: color-mix(in srgb, var(--color-line) 70%, transparent); background-color: transparent; }
   .asset-row:hover { background-color: color-mix(in srgb, var(--color-white) 2.5%, transparent); }
-  .asset-row.is-selected { background-color: color-mix(in srgb, var(--color-primary-hover) 7%, transparent); box-shadow: var(--shadow-selection); }
+  .asset-row.is-selected { border-left: 2px solid var(--color-primary); background-color: color-mix(in srgb, var(--color-primary-hover) 7%, transparent); }
   .thumbnail { @apply grid h-12 w-12 place-items-center overflow-hidden rounded-lg border; border-color: var(--color-line); color: var(--color-muted); background: repeating-conic-gradient(var(--color-checker-light) 0 25%, var(--color-checker-dark) 0 50%) 50%/12px 12px; }
   .thumbnail img { @apply h-full w-full object-contain; }
   .asset-copy { @apply min-w-0; }
@@ -140,7 +135,7 @@
   .preview-error { @apply absolute left-1/2 top-1/2 z-10 flex max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-xl border p-5 text-center backdrop-blur-md; border-color: color-mix(in srgb, var(--color-primary-hover) 30%, transparent); background-color: color-mix(in srgb, var(--color-black) 80%, transparent); color: var(--color-primary-subtle); }
   .preview-error strong { @apply mt-2 text-sm; color: var(--color-white); }
   .preview-error span { @apply mt-1 text-xs leading-5; color: var(--color-muted); }
-  .canvas-tools { @apply absolute right-3 top-3 flex items-center gap-1 rounded-[10px] border p-1 shadow-xl backdrop-blur-md; border-color: var(--color-line); background-color: color-mix(in srgb, var(--color-black) 75%, transparent); }
+  .canvas-tools { @apply absolute right-3 top-3 flex items-center gap-1 rounded-[10px] border p-1 backdrop-blur-md; border-color: var(--color-line); background-color: color-mix(in srgb, var(--color-black) 75%, transparent); }
   .canvas-tools .button { border-color: transparent; background-color: transparent; }
   .canvas-tools .button:hover { border-color: var(--color-line); background-color: var(--color-neutral-800); }
   .zoom-value { @apply h-9 min-w-[54px] rounded-lg border-0 px-2 text-[11px] font-semibold; background-color: transparent; color: var(--color-neutral-300); }
@@ -158,10 +153,18 @@
   .drop-overlay { @apply pointer-events-none fixed inset-4 z-50 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed backdrop-blur-md; border-color: var(--color-primary); background-color: color-mix(in srgb, var(--color-ink) 90%, transparent); color: var(--color-primary); }
   .drop-overlay strong { @apply mt-3 text-lg; color: var(--color-white); }
   .drop-overlay span { @apply mt-1 text-xs; color: var(--color-muted); }
-  .toast { @apply fixed bottom-5 right-5 z-[60] max-w-sm rounded-lg border px-4 py-3 text-xs font-medium shadow-2xl; border-color: var(--color-line); background-color: var(--color-neutral-900); color: var(--color-white); }
+  .toast { @apply fixed bottom-5 right-5 z-[60] max-w-sm rounded-lg border px-4 py-3 text-xs font-medium; border-color: var(--color-line); background-color: var(--color-neutral-900); color: var(--color-white); }
   .toast-success { border-color: color-mix(in srgb, var(--color-success-border) 30%, transparent); }
   .toast-error { border-color: color-mix(in srgb, var(--color-primary-hover) 40%, transparent); color: var(--color-primary-faint); }
   .is-loading svg { @apply animate-spin; }
+
+  .confirm-backdrop { @apply fixed inset-0 z-[70] grid place-items-center p-4 backdrop-blur-sm; background-color: color-mix(in srgb, var(--color-black) 72%, transparent); }
+  .confirm-dialog { @apply w-full max-w-md p-5; }
+  .confirm-icon { @apply mb-4 grid h-11 w-11 place-items-center rounded-xl border; border-color: color-mix(in srgb, var(--color-warning) 35%, transparent); background-color: color-mix(in srgb, var(--color-warning) 10%, transparent); color: var(--color-warning); }
+  .confirm-danger .confirm-icon { border-color: color-mix(in srgb, var(--color-primary-soft) 35%, transparent); background-color: color-mix(in srgb, var(--color-primary-hover) 10%, transparent); color: var(--color-primary-soft); }
+  .confirm-dialog h2 { @apply m-0 text-lg font-semibold tracking-[-.02em]; color: var(--color-white); }
+  .confirm-dialog p { @apply mb-0 mt-2 text-sm leading-6; color: var(--color-muted); }
+  .confirm-actions { @apply mt-5 flex justify-end gap-2; }
 
   .fatal-error { @apply mx-auto flex h-dvh max-w-2xl flex-col items-start justify-center px-6; }
   .fatal-error img { @apply mb-8 h-12 w-12 rounded-xl; }
@@ -170,7 +173,7 @@
   .fatal-error code { @apply my-5 max-w-full overflow-hidden text-ellipsis rounded-lg border px-3 py-2 text-xs; border-color: color-mix(in srgb, var(--color-primary-hover) 20%, transparent); background-color: color-mix(in srgb, var(--color-primary-hover) 5%, transparent); color: var(--color-primary-subtle); }
   .fatal-error > div { @apply flex gap-2; }
 
-  .help-page { @apply mx-auto h-full max-w-5xl overflow-hidden py-8; }
+  .help-page { @apply mx-auto h-full min-h-0 w-full max-w-5xl flex-1 overflow-hidden py-8; }
   .back-link { @apply mb-12 inline-flex items-center gap-2 text-xs no-underline; color: var(--color-muted); }
   .back-link:hover { color: var(--color-white); }
   .help-page > h1 { @apply mb-10 mt-3 max-w-3xl text-4xl font-bold tracking-[-.045em] md:text-6xl; color: var(--color-white); }

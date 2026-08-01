@@ -9,9 +9,13 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, details) { console.error('Lara recovered from an interface error', error, details) }
 
-  reload = () => window.location.reload()
+  reload = () => {
+    if (!window.confirm('Reload Lara? Unsaved work in this tab may be lost if session storage failed.')) return
+    window.location.reload()
+  }
 
   reset = () => {
+    if (!window.confirm('Clear the Lara workspace and reload?')) return
     sessionStorage.removeItem('lara.workspace.v2')
     window.location.reload()
   }

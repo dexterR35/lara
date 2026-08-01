@@ -8,10 +8,12 @@ import FilePicker from '../components/FilePicker'
 import Preview from '../components/Preview'
 import StatusToast from '../components/StatusToast'
 import { imageAssets } from '../lib/lottie'
+import { useConfirm } from '../state/ConfirmContext'
 import { useWorkspace } from '../state/WorkspaceContext'
 
 export default function Editor() {
   const { source, sourceName, replacements, notice, notify, loadJsonFile, applyBatch } = useWorkspace()
+  const ask = useConfirm()
 
   useEffect(() => {
     const listener = (event) => notify(event.detail, 'error')
@@ -20,12 +22,21 @@ export default function Editor() {
   }, [notify])
 
   const importDroppedFiles = useCallback(async (files) => {
-    const json = files.find((file) => file.name.toLowerCase().endsWith('.json'))
+    const json = files.find((file) => file.name.toLowerCase().endsWith('.json') || file.name.toLowerCase().endsWith('.lottie'))
+    const accepted = await ask(json
+      ? { title: 'Open dropped file?', message: `Replace the current project with ${json.name}. Unsaved replacements stay only if you export first.`, tone: 'danger' }
+      : { title: 'Apply dropped images?', message: `Match ${files.length} dropped file${files.length === 1 ? '' : 's'} against this animation’s assets.` })
+    if (!accepted) return
     try {
       if (json) await loadJsonFile(json)
       else await applyBatch(files)
     } catch (error) { notify(error.message, 'error') }
-  }, [applyBatch, loadJsonFile, notify])
+  }, [applyBatch, ask, loadJsonFile, notify])
+
+  const openAnother = useCallback(async (file) => {
+    try { await loadJsonFile(file) }
+    catch (error) { notify(error.message, 'error') }
+  }, [loadJsonFile, notify])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDropAccepted: importDroppedFiles,
@@ -52,7 +63,7 @@ export default function Editor() {
     <div className="workspace-summary">
       <div className="file-identity"><span className="file-icon"><FileJson size={20} aria-hidden="true"/></span><div><p title={sourceName}>{sourceName}</p><span>{source.w} × {source.h} · {stats.fps || '?'} fps · {stats.duration.toFixed(1)} sec</span></div></div>
       <div className="summary-stats"><span><strong>{stats.assets}</strong> assets</span><span><strong>{stats.changes}</strong> changes</span></div>
-      <FilePicker icon={Upload} accept=".json,.lottie,application/json,application/zip" onFiles={(file) => loadJsonFile(file).catch((error) => notify(error.message, 'error'))}>Open another</FilePicker>
+      <FilePicker icon={Upload} accept=".json,.lottie,application/json,application/zip" onFiles={openAnother}>Open another</FilePicker>
     </div>
     <div className="editor-grid"><AssetList/><Preview/></div>
     <ExportCard/>
