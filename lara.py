@@ -43,7 +43,7 @@ except ImportError as exc:  # pragma: no cover - friendly startup error
     )
     raise SystemExit(1) from exc
 
-from extract_lottie_images import collect_refs, extract_images, mime_to_ext
+from lottie_assets import collect_refs, extract_images, mime_to_ext
 
 
 APP_DIR = Path(__file__).resolve().parent

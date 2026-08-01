@@ -92,34 +92,9 @@ Double-click an asset row, or use **Replace**, to change a single image. Use **R
 | `lara.py` | The desktop application and user interface. |
 | `run_lara.py` | Creates the private environment, installs dependencies, and starts the app. |
 | `lara`, `lara.cmd`, `Lara.command` | Linux, Windows, and macOS launchers. |
-| `extract_lottie_images.py` | Standalone command-line extractor and optional frame/GIF renderer. |
+| `lottie_assets.py` | Internal image extraction helpers used by the desktop app. |
 
 Most users should start Lara through their operating-system launcher rather than running the Python files directly.
-
-## Command-line extractor
-
-The repository also includes a CLI for extraction and rendering:
-
-```bash
-python -m pip install -e .
-extract-lottie-images animation.json
-```
-
-Useful options include:
-
-```text
---anim          Write an animation.json that references the extracted files
---frames        Render a PNG frame sequence
---gif           Render an animated GIF
---every N       Capture every Nth frame
---scale VALUE   Set the render scale
-```
-
-Frame and GIF rendering require the optional render dependencies:
-
-```bash
-python -m pip install -e ".[render]"
-```
 
 ## Troubleshooting
 
