@@ -507,6 +507,11 @@
     z-index: 1;
   }
 
+  .konva-preview.is-dragging .konvajs-content,
+  .konva-preview.is-dragging .konvajs-content canvas {
+    cursor: grabbing !important;
+  }
+
   .preview-error {
     @apply pointer-events-none absolute left-1/2 top-1/2 z-20 flex max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-xl border p-5 text-center backdrop-blur-md;
     border-color: color-mix(in srgb, var(--color-primary-hover) 30%, transparent);
@@ -718,7 +723,7 @@
 
   .layer-duration {
     @apply absolute bottom-2 top-2 rounded-sm;
-    background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-neutral-800));
+    background-color: color-mix(in srgb, #6b9bd1 28%, var(--color-neutral-800));
   }
 
   .layer-time-track>.keyframe-track {
@@ -753,7 +758,7 @@
 
   .keyframe-marker {
     @apply absolute left-0 top-1/2 z-[5] grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center border-0 bg-transparent p-0;
-    color: var(--color-primary-soft);
+    color: #dddddd;
   }
 
   .keyframe-marker:hover,

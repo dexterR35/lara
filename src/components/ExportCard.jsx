@@ -68,7 +68,7 @@ export default function ExportCard() {
   }
 
   return <section className="export-card panel">
-    <div className="export-copy"><p className="eyebrow">Assets & export</p><h2>Download or rebuild</h2><p>{imageCount} embedded images · {fonts.length} font references{fonts.length ? ` · ${fonts.map((font) => `${font.family} ${font.style}`).join(', ')}` : ''}</p></div>
+    <div className="export-copy"><p className="eyebrow">Assets & export</p><p>{imageCount} embedded images · {fonts.length} font references{fonts.length ? ` · ${fonts.map((font) => `${font.family} ${font.style}`).join(', ')}` : ''}</p></div>
     <div className="export-actions">
       <FilePicker icon={FolderInput} accept="image/*,.svg" directory onFiles={batch}>Load image folder</FilePicker>
       <Button icon={Download} disabled={busy} onClick={downloadJson}>Build JSON</Button>

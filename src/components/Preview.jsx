@@ -64,10 +64,29 @@ function imageLayerBounds(layer, index, layers, assets, frame, cache) {
   }
 }
 
+function previewReloadKey(source, sourceName, replacements) {
+  if (!source) return 'none'
+  return [
+    sourceName,
+    source.w,
+    source.h,
+    source.ip,
+    source.op,
+    source.fr,
+    Object.keys(replacements).sort().map((id) => `${id}:${replacements[id]?.dataUrl?.length || 0}`).join(','),
+    source.layers.map((layer) => [layer.ind, layer.ty, layer.refId, layer.parent, layer.ip, layer.op, layer.hd ? 1 : 0].join(':')).join('|'),
+    (source.assets || []).map((asset) => {
+      const path = String(asset.p || '')
+      return [asset.id, asset.w, asset.h, path.startsWith('data:') ? `d${path.length}` : `${asset.u || ''}${path}`].join(':')
+    }).join('|'),
+  ].join('::')
+}
+
 export default function Preview() {
   const {
     merged,
     source,
+    sourceName,
     replacements,
     notify,
     selectedLayerIndices,
@@ -89,12 +108,13 @@ export default function Preview() {
   const visualRefs = useRef(new Map())
   const imageCache = useRef(new Map())
   const hiddenSvgLayers = useRef(new Set())
-  const pendingVisualCommit = useRef(false)
   const guideRefs = useRef(new Map())
   const interaction = useRef(null)
   const selectedLayerIndicesRef = useRef(selectedLayerIndices)
   const animation = useRef(null)
   const currentFrameRef = useRef(currentFrame)
+  const mergedRef = useRef(merged)
+  const timelineWasOpen = useRef(timelineOpen)
   const [playing, setPlaying] = useState(false)
   const [looping, setLooping] = useState(true)
   const [previewError, setPreviewError] = useState('')
@@ -102,13 +122,15 @@ export default function Preview() {
   const [viewportSize, setViewportSize] = useState({ width: 1, height: 1 })
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
   const [motionGuides, setMotionGuides] = useState([])
-  const [activeVisualIndices, setActiveVisualIndices] = useState([])
+  const [dragIndices, setDragIndices] = useState([])
+  const [bakeToken, setBakeToken] = useState(0)
   const [, refreshImages] = useState(0)
   const replacementCount = useMemo(() => Object.keys(replacements).length, [replacements])
   const width = Math.max(Number(merged.w) || 1, 1)
   const height = Math.max(Number(merged.h) || 1, 1)
   const firstFrame = Number(source.ip) || 0
   const lastFrame = Number(source.op) || firstFrame + 1
+  const reloadKey = useMemo(() => previewReloadKey(source, sourceName, replacements), [source, sourceName, replacements])
   const editableLayers = useMemo(() => {
     const cache = new Map()
     return source.layers.map((layer, index) => {
@@ -123,10 +145,17 @@ export default function Preview() {
   const hitLayers = useMemo(() => [...editableLayers].reverse(), [editableLayers])
   const imageSourcesKey = editableLayers.map(({ previewSrc }) => previewSrc).join('|')
   const selectionKey = selectedLayerIndices.join(',')
+  const dragKey = dragIndices.join(',')
+
+  mergedRef.current = merged
 
   useEffect(() => { currentFrameRef.current = currentFrame }, [currentFrame])
   useEffect(() => { selectedLayerIndicesRef.current = selectedLayerIndices }, [selectedLayerIndices])
   useEffect(() => { if (!interaction.current) setMotionGuides([]) }, [selectionKey])
+  useEffect(() => {
+    if (timelineWasOpen.current && !timelineOpen) setBakeToken((token) => token + 1)
+    timelineWasOpen.current = timelineOpen
+  }, [timelineOpen])
 
   useEffect(() => {
     let disposed = false
@@ -165,9 +194,40 @@ export default function Preview() {
 
   useEffect(() => { fitCanvas() }, [fitCanvas])
 
+  const clearHiddenSvg = () => {
+    hiddenSvgLayers.current.forEach((element) => { element.style.visibility = '' })
+    hiddenSvgLayers.current.clear()
+  }
+
+  const hideSvgLayer = useCallback((item) => {
+    const host = svgHost.current
+    if (!host) return
+    const sourceValue = item.previewSrc
+    const assetPath = String(item.asset.p || '')
+    const sameAssetBefore = source.layers.slice(0, item.index).filter((layer) => layer.refId === item.layer.refId).length
+    const candidates = [...host.querySelectorAll('image')].filter((element) => {
+      if (element.closest('defs')) return false
+      const href = element.getAttribute('href') || element.getAttribute('xlink:href') || ''
+      return href === sourceValue || href.endsWith(sourceValue) || (assetPath && href.endsWith(assetPath))
+    })
+    const element = candidates[sameAssetBefore] || candidates[0]
+    if (!element) return
+    element.style.visibility = 'hidden'
+    hiddenSvgLayers.current.add(element)
+  }, [source.layers])
+
+  const syncHiddenSvgLayers = useCallback(() => {
+    if (!timelineOpen) {
+      clearHiddenSvg()
+      return
+    }
+    editableLayers.forEach(hideSvgLayer)
+  }, [editableLayers, hideSvgLayer, timelineOpen])
+
   useEffect(() => {
     setPreviewError('')
     setPreviewReady(false)
+    clearHiddenSvg()
     let disposed = false
     let instance
     let update
@@ -177,17 +237,19 @@ export default function Preview() {
     let failed
     let lastFrameUpdate = 0
     let initialized = false
+    const data = structuredClone(mergedRef.current)
 
     async function loadPreview() {
       try {
         const { default: lottie } = await import('lottie-web/build/player/esm/lottie_svg.min.js')
-        if (disposed) return
+        if (disposed || !svgHost.current) return
+        svgHost.current.innerHTML = ''
         instance = lottie.loadAnimation({
           container: svgHost.current,
           renderer: 'svg',
           loop: looping,
           autoplay: true,
-          animationData: structuredClone(merged),
+          animationData: data,
           rendererSettings: { preserveAspectRatio: 'xMidYMid meet', clearCanvas: true },
         })
         animation.current = instance
@@ -207,26 +269,12 @@ export default function Preview() {
           instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
           setPreviewReady(true)
         }
-        const finishVisualCommit = () => {
-          if (!pendingVisualCommit.current) return
-          hiddenSvgLayers.current.forEach((element) => { element.style.visibility = '' })
-          hiddenSvgLayers.current.clear()
-          pendingVisualCommit.current = false
-          setActiveVisualIndices([])
-        }
-        domReady = () => {
-          ready()
-          finishVisualCommit()
-        }
+        domReady = () => ready()
         loadedImages = () => {
           instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
-          finishVisualCommit()
         }
         failed = () => {
-          hiddenSvgLayers.current.forEach((element) => { element.style.visibility = '' })
-          hiddenSvgLayers.current.clear()
-          pendingVisualCommit.current = false
-          setActiveVisualIndices([])
+          clearHiddenSvg()
           setPreviewError('The animation renderer could not load this composition.')
           setPreviewReady(false)
           notify('Preview could not render this Lottie file.', 'error')
@@ -262,7 +310,12 @@ export default function Preview() {
       }
       if (animation.current === instance) animation.current = null
     }
-  }, [firstFrame, height, merged, notify, setCurrentFrame, width])
+  }, [bakeToken, firstFrame, height, notify, reloadKey, setCurrentFrame, width])
+
+  useEffect(() => {
+    if (!previewReady) return
+    syncHiddenSvgLayers()
+  }, [previewReady, syncHiddenSvgLayers])
 
   useEffect(() => {
     const onSeek = (event) => {
@@ -274,11 +327,24 @@ export default function Preview() {
   }, [firstFrame])
 
   useEffect(() => {
+    if (interaction.current) return
     const transformer = transformerRef.current
     const nodes = timelineOpen ? selectedLayerIndices.map((index) => nodeRefs.current.get(index)).filter(Boolean) : []
     transformer?.nodes(nodes)
+    transformer?.forceUpdate()
     transformer?.getLayer()?.batchDraw()
-  }, [editableLayers, selectedLayerIndices, timelineOpen])
+  }, [dragKey, editableLayers, selectedLayerIndices, timelineOpen])
+
+  useEffect(() => {
+    if (interaction.current) return
+    editableLayers.forEach((item) => {
+      if (dragIndices.includes(item.index)) return
+      nodeRefs.current.get(item.index)?.setAttrs(item.bounds)
+      visualRefs.current.get(item.index)?.setAttrs({ ...item.bounds, visible: timelineOpen })
+    })
+    transformerRef.current?.forceUpdate()
+    transformerRef.current?.getLayer()?.batchDraw()
+  }, [dragIndices, editableLayers, timelineOpen])
 
   useEffect(() => {
     const handleShortcut = (event) => {
@@ -346,7 +412,7 @@ export default function Preview() {
 
   const syncVisualToNode = (entry) => {
     const visual = visualRefs.current.get(entry.item.index)
-    if (!visual?.image()) return false
+    if (!visual) return false
     visual.setAttrs({
       x: entry.node.x(),
       y: entry.node.y(),
@@ -358,23 +424,6 @@ export default function Preview() {
       visible: true,
     })
     return true
-  }
-
-  const hideSvgLayer = (entry) => {
-    const host = svgHost.current
-    if (!host) return
-    const sourceValue = entry.item.previewSrc
-    const assetPath = String(entry.item.asset.p || '')
-    const sameAssetBefore = source.layers.slice(0, entry.item.index).filter((layer) => layer.refId === entry.item.layer.refId).length
-    const candidates = [...host.querySelectorAll('image')].filter((element) => {
-      if (element.closest('defs')) return false
-      const href = element.getAttribute('href') || element.getAttribute('xlink:href') || ''
-      return href === sourceValue || href.endsWith(sourceValue) || (assetPath && href.endsWith(assetPath))
-    })
-    const element = candidates[sameAssetBefore] || candidates[0]
-    if (!element) return
-    element.style.visibility = 'hidden'
-    hiddenSvgLayers.current.add(element)
   }
 
   const valuesAfterInteraction = (entry) => {
@@ -393,6 +442,10 @@ export default function Preview() {
       scale: [scale(value.scaleX, entry.oldScale[0]), scale(value.scaleY, entry.oldScale[1]), entry.oldScale[2] ?? 100],
       rotation: finite(value.rotation, entry.oldRotation),
     }
+  }
+
+  const setStageCursor = (cursor) => {
+    if (stageRef.current) stageRef.current.container().style.cursor = cursor
   }
 
   const beginInteraction = (item, node) => {
@@ -424,10 +477,10 @@ export default function Preview() {
       activePoint: { x: node.x(), y: node.y() },
       entries,
     }
-    const visualEntries = entries.filter(syncVisualToNode)
-    setActiveVisualIndices(visualEntries.map((entry) => entry.item.index))
-    visualEntries.forEach(hideSvgLayer)
+    entries.forEach(syncVisualToNode)
+    setDragIndices(entries.map((entry) => entry.item.index))
     setMotionGuides(entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: entry.guideStart })))
+    setStageCursor('grabbing')
     animation.current?.pause()
     setPlaying(false)
   }
@@ -442,13 +495,16 @@ export default function Preview() {
         if (entry.item.index !== item.index) entry.node.position({ x: entry.worldPoint.x + dx, y: entry.worldPoint.y + dy })
       })
     }
-    current.entries.forEach((entry) => {
-      syncVisualToNode(entry)
-      const guide = guideRefs.current.get(entry.item.index)
-      const end = nodeCenter(entry.node)
-      guide?.line?.points([entry.guideStart.x, entry.guideStart.y, end.x, end.y])
-      guide?.end?.position(end)
-    })
+    current.entries.forEach(syncVisualToNode)
+    current.guides = current.entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: nodeCenter(entry.node) }))
+    if (!current.raf) {
+      current.raf = requestAnimationFrame(() => {
+        const live = interaction.current
+        if (!live) return
+        live.raf = 0
+        if (live.guides) setMotionGuides(live.guides)
+      })
+    }
     transformerRef.current?.forceUpdate()
     transformerRef.current?.getLayer()?.batchDraw()
   }
@@ -456,16 +512,19 @@ export default function Preview() {
   const commitPosition = () => {
     const current = interaction.current
     if (!current) return
-    setMotionGuides(current.entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: nodeCenter(entry.node) })))
-    pendingVisualCommit.current = true
+    if (current.raf) cancelAnimationFrame(current.raf)
+    const guides = current.guides || current.entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: nodeCenter(entry.node) }))
+    setMotionGuides(guides)
     current.entries.forEach((entry) => setLayerTransform(entry.item.index, 'p', currentFrame, valuesAfterInteraction(entry).position, true))
     interaction.current = null
+    setDragIndices([])
+    setStageCursor('move')
   }
 
   const commitTransform = () => {
     const current = interaction.current
     if (!current) return
-    pendingVisualCommit.current = true
+    if (current.raf) cancelAnimationFrame(current.raf)
     current.entries.forEach((entry) => {
       const values = valuesAfterInteraction(entry)
       setLayerTransform(entry.item.index, 'p', currentFrame, values.position, true)
@@ -473,6 +532,9 @@ export default function Preview() {
       setLayerTransform(entry.item.index, 'r', currentFrame, values.rotation, true)
     })
     interaction.current = null
+    setDragIndices([])
+    setMotionGuides([])
+    setStageCursor('move')
   }
 
   const beginSelectedTransform = () => {
@@ -500,7 +562,7 @@ export default function Preview() {
 
   return <section className="preview-panel panel" aria-label="Animation preview">
     <div className="preview-heading"><div><p className="eyebrow">Live preview</p></div><span className="status-live"><span/> {replacementCount ? `${replacementCount} changes applied` : 'Original'}</span></div>
-    <div ref={viewport} className={`preview-canvas konva-preview ${timelineOpen ? 'is-layer-editing' : ''}`}>
+    <div ref={viewport} className={`preview-canvas konva-preview ${timelineOpen ? 'is-layer-editing' : ''} ${dragIndices.length ? 'is-dragging' : ''}`}>
       <div ref={svgHost} className="lottie-svg-host" style={{ width, height, transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}/>
       <Stage
         ref={stageRef}
@@ -516,42 +578,44 @@ export default function Preview() {
         <Layer>
           {hitLayers.map((item) => {
             const cached = imageCache.current.get(item.previewSrc)
+            const busy = dragIndices.includes(item.index)
             return <KonvaImage
-              {...item.bounds}
               key={`visual-${item.layer.ind ?? item.index}-${item.layer.refId}`}
               ref={(node) => node ? visualRefs.current.set(item.index, node) : visualRefs.current.delete(item.index)}
               image={cached?.ready ? cached.image : undefined}
-              visible={activeVisualIndices.includes(item.index)}
+              {...(busy ? {} : item.bounds)}
+              visible={timelineOpen && Boolean(cached?.ready)}
               listening={false}
             />
           })}
-          {motionGuides.map((guide) => {
-            const distance = Math.hypot(guide.end.x - guide.start.x, guide.end.y - guide.start.y)
-            return <Group key={`motion-${guide.index}`} listening={false} visible={distance > .5} ref={(node) => {
-              if (!node) guideRefs.current.delete(guide.index)
-              else guideRefs.current.set(guide.index, { line: node.findOne('.motion-line'), end: node.findOne('.motion-end') })
-            }}>
-              <Line name="motion-line" points={[guide.start.x, guide.start.y, guide.end.x, guide.end.y]} stroke={PRIMARY} strokeWidth={1.25 / view.scale} dash={[1.5 / view.scale, 5 / view.scale]} lineCap="round" opacity={.9}/>
-              <Circle x={guide.start.x} y={guide.start.y} radius={3.5 / view.scale} fill="#111318" stroke="#ffffff" strokeWidth={1 / view.scale}/>
-              <Circle name="motion-end" x={guide.end.x} y={guide.end.y} radius={3.5 / view.scale} fill={PRIMARY} stroke="#ffffff" strokeWidth={1 / view.scale}/>
-            </Group>
+          {hitLayers.map((item) => {
+            const busy = dragIndices.includes(item.index)
+            const selected = selectedLayerIndices.includes(item.index)
+            const hovered = hoveredLayerIndex === item.index
+            return <Rect
+              key={`${item.layer.ind ?? item.index}-${item.layer.refId}`}
+              ref={(node) => node ? nodeRefs.current.set(item.index, node) : nodeRefs.current.delete(item.index)}
+              {...(busy ? {} : item.bounds)}
+              fill="rgba(226,72,72,0.001)"
+              stroke={selected ? PRIMARY : hovered ? 'rgba(226,72,72,.75)' : 'transparent'}
+              strokeWidth={selected ? 1.5 / Math.max(view.scale, .65) : hovered ? .8 / Math.max(view.scale, .65) : 0}
+              draggable={timelineOpen}
+              dragDistance={2}
+              onMouseEnter={() => {
+                setHoveredLayerIndex(item.index)
+                if (!interaction.current) setStageCursor('grab')
+              }}
+              onMouseLeave={() => {
+                setHoveredLayerIndex((current) => current === item.index ? null : current)
+                if (!interaction.current) setStageCursor('default')
+              }}
+              onMouseDown={(event) => selectFromPointer(item, event)}
+              onTouchStart={(event) => selectFromPointer(item, event)}
+              onDragStart={(event) => { event.cancelBubble = true; beginInteraction(item, event.target) }}
+              onDragMove={(event) => { event.cancelBubble = true; moveSelection(item, event.target) }}
+              onDragEnd={(event) => { event.cancelBubble = true; commitPosition() }}
+            />
           })}
-          {hitLayers.map((item) => <Rect
-            {...item.bounds}
-            key={`${item.layer.ind ?? item.index}-${item.layer.refId}`}
-            ref={(node) => node ? nodeRefs.current.set(item.index, node) : nodeRefs.current.delete(item.index)}
-            fill="rgba(226,72,72,0.001)"
-            stroke={selectedLayerIndices.includes(item.index) ? PRIMARY : hoveredLayerIndex === item.index ? 'rgba(226,72,72,.75)' : 'transparent'}
-            strokeWidth={selectedLayerIndices.includes(item.index) ? 1 / Math.max(view.scale, .65) : hoveredLayerIndex === item.index ? .8 / Math.max(view.scale, .65) : 0}
-            draggable={timelineOpen}
-            onMouseEnter={() => { setHoveredLayerIndex(item.index); if (stageRef.current) stageRef.current.container().style.cursor = 'move' }}
-            onMouseLeave={() => { setHoveredLayerIndex((current) => current === item.index ? null : current); if (stageRef.current) stageRef.current.container().style.cursor = 'default' }}
-            onMouseDown={(event) => selectFromPointer(item, event)}
-            onTouchStart={(event) => selectFromPointer(item, event)}
-            onDragStart={(event) => { event.cancelBubble = true; beginInteraction(item, event.target) }}
-            onDragMove={(event) => { event.cancelBubble = true; moveSelection(item, event.target) }}
-            onDragEnd={(event) => { event.cancelBubble = true; commitPosition() }}
-          />)}
           <Transformer
             ref={transformerRef}
             onTransformStart={beginSelectedTransform}
@@ -568,7 +632,7 @@ export default function Preview() {
             anchorCornerRadius={0}
             anchorSize={7 / Math.max(view.scale, .65)}
             anchorStrokeWidth={1 / Math.max(view.scale, .65)}
-            borderStrokeWidth={1 / Math.max(view.scale, .65)}
+            borderStrokeWidth={1.25 / Math.max(view.scale, .65)}
             rotateAnchorOffset={20 / Math.max(view.scale, .65)}
             anchorStyleFunc={(anchor) => anchor.hitStrokeWidth(18 / view.scale)}
             boundBoxFunc={(oldBox, newBox) => {
@@ -579,6 +643,24 @@ export default function Preview() {
             }}
             keepRatio={false}
           />
+          {motionGuides.map((guide) => {
+            const dragging = dragIndices.includes(guide.index)
+            const distance = Math.hypot(guide.end.x - guide.start.x, guide.end.y - guide.start.y)
+            const stroke = 1.5 / Math.max(view.scale, .5)
+            return <Group
+              key={`motion-${guide.index}`}
+              listening={false}
+              visible={dragging || distance > .5}
+              ref={(node) => {
+                if (!node) guideRefs.current.delete(guide.index)
+                else guideRefs.current.set(guide.index, { group: node, line: node.findOne('.motion-line'), end: node.findOne('.motion-end') })
+              }}
+            >
+              <Line name="motion-line" points={[guide.start.x, guide.start.y, guide.end.x, guide.end.y]} stroke={PRIMARY} strokeWidth={stroke} dash={[4 / view.scale, 4 / view.scale]} lineCap="round" opacity={.95}/>
+              <Circle x={guide.start.x} y={guide.start.y} radius={4 / Math.max(view.scale, .5)} fill="#111318" stroke="#ffffff" strokeWidth={1.25 / Math.max(view.scale, .5)}/>
+              <Circle name="motion-end" x={guide.end.x} y={guide.end.y} radius={4 / Math.max(view.scale, .5)} fill={PRIMARY} stroke="#ffffff" strokeWidth={1.25 / Math.max(view.scale, .5)}/>
+            </Group>
+          })}
         </Layer>
       </Stage>
       {previewError && <div className="preview-error"><AlertTriangle size={24}/><strong>Preview unavailable</strong><span>{previewError}</span></div>}
