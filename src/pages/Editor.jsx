@@ -60,7 +60,7 @@ export default function Editor() {
 
   if (!source) return <><Dropzone onFile={loadJsonFile}/><StatusToast notice={notice}/></>
 
-  return <div {...getRootProps({ className: 'workspace' })}>
+  return <div {...getRootProps({ className: `workspace ${timelineOpen ? 'has-timeline' : ''}` })}>
     <input {...getInputProps()}/>
     <div className="workspace-summary">
       <div className="file-identity"><span className="file-icon"><FileJson size={20} aria-hidden="true"/></span><div><p title={sourceName}>{sourceName}</p><span>{source.w} × {source.h} · {stats.fps || '?'} fps · {stats.duration.toFixed(1)} sec</span></div></div>

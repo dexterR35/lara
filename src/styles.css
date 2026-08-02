@@ -319,6 +319,15 @@
     grid-template-rows: minmax(0, 1fr);
   }
 
+  .workspace.has-timeline {
+    @apply overflow-y-auto;
+    scrollbar-color: var(--color-neutral-700) transparent;
+  }
+
+  .editor-grid.has-timeline {
+    @apply h-[min(52vh,560px)] min-h-[420px] flex-none;
+  }
+
   .layers-panel,
   .preview-panel {
     @apply flex min-h-0 flex-col overflow-hidden;
@@ -573,7 +582,7 @@
   }
 
   .timeline-panel {
-    @apply flex h-[240px] shrink-0 flex-col overflow-hidden;
+    @apply flex h-[min(56vh,640px)] min-h-[500px] shrink-0 flex-col overflow-hidden;
   }
 
   .timeline-toolbar {
