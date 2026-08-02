@@ -100,6 +100,107 @@ export function expectedFilename(asset) {
 
 export const assetSource = (asset) => String(asset?.p || '').startsWith('data:') ? asset.p : `${asset?.u || ''}${asset?.p || ''}`
 
+export const TRANSFORM_TRACKS = [
+  { key: 'a', label: 'Anchor point', dimensions: ['X', 'Y'], fallback: [0, 0, 0] },
+  { key: 'p', label: 'Position', dimensions: ['X', 'Y'], fallback: [0, 0, 0] },
+  { key: 's', label: 'Scale', dimensions: ['X', 'Y'], fallback: [100, 100, 100] },
+  { key: 'r', label: 'Rotation', dimensions: ['°'], fallback: 0 },
+  { key: 'o', label: 'Opacity', dimensions: ['%'], fallback: 100 },
+]
+
+const cloneValue = (value) => Array.isArray(value) ? [...value] : Number(value) || 0
+const normalizeValue = (value, fallback) => value == null ? cloneValue(fallback) : cloneValue(value)
+
+export function layerIdentity(layer, index) {
+  return String(layer?.ind ?? `layer-${index}`)
+}
+
+export function propertyKeyframes(property) {
+  if (property?.s && property.x && property.y) {
+    const frames = new Set()
+    ;[property.x, property.y, property.z].filter(Boolean).forEach((dimension) => propertyKeyframes(dimension).forEach(({ t }) => frames.add(Number(t))))
+    return [...frames].sort((a, b) => a - b).map((t) => ({ t }))
+  }
+  if (!property || property.a !== 1 || !Array.isArray(property.k)) return []
+  return property.k.filter((keyframe) => keyframe && Number.isFinite(Number(keyframe.t)))
+}
+
+export function propertyValueAtFrame(property, frame, fallback = 0) {
+  if (!property) return cloneValue(fallback)
+  if (property.s && property.x && property.y) {
+    return [
+      propertyValueAtFrame(property.x, frame, 0),
+      propertyValueAtFrame(property.y, frame, 0),
+      propertyValueAtFrame(property.z, frame, 0),
+    ]
+  }
+  if (property.a !== 1 || !Array.isArray(property.k)) return normalizeValue(property.k, fallback)
+  const keyframes = propertyKeyframes(property)
+  if (!keyframes.length) return cloneValue(fallback)
+  const target = Number(frame) || 0
+  let current = keyframes[0]
+  let next = null
+  for (let index = 0; index < keyframes.length; index += 1) {
+    if (Number(keyframes[index].t) <= target) current = keyframes[index]
+    if (Number(keyframes[index].t) > target) { next = keyframes[index]; break }
+  }
+  const start = normalizeValue(current.s, fallback)
+  if (!next || current.h === 1 || Number(next.t) === Number(current.t)) return start
+  const end = normalizeValue(current.e ?? next.s, start)
+  const progress = Math.max(0, Math.min(1, (target - Number(current.t)) / (Number(next.t) - Number(current.t))))
+  if (Array.isArray(start)) return start.map((value, index) => value + ((end[index] ?? value) - value) * progress)
+  return start + (end - start) * progress
+}
+
+function syncKeyframeEnds(keyframes) {
+  return keyframes.map((keyframe, index) => {
+    const result = { ...keyframe, s: cloneValue(keyframe.s) }
+    const next = keyframes[index + 1]
+    if (next && result.h !== 1) result.e = cloneValue(next.s)
+    else delete result.e
+    return result
+  })
+}
+
+export function setLayerTransformValue(data, layerIndex, track, frame, value, createKeyframe = false) {
+  const result = structuredClone(data)
+  const layer = result.layers?.[layerIndex]
+  if (!layer) return result
+  layer.ks ||= {}
+  const definition = TRANSFORM_TRACKS.find((item) => item.key === track)
+  const fallback = definition?.fallback ?? 0
+  const property = layer.ks[track] ||= { a: 0, k: cloneValue(fallback) }
+  const normalized = normalizeValue(value, fallback)
+
+  if (track === 'p' && property.s && property.x && property.y) {
+    const combined = propertyValueAtFrame(property, frame, fallback)
+    Object.keys(property).forEach((key) => delete property[key])
+    property.a = 0
+    property.k = combined
+  }
+
+  if (!createKeyframe && property.a !== 1) {
+    property.a = 0
+    property.k = normalized
+    return result
+  }
+
+  const targetFrame = Number(frame) || 0
+  let keyframes = propertyKeyframes(property).map((keyframe) => ({ ...keyframe, s: normalizeValue(keyframe.s, fallback) }))
+  if (!keyframes.length) {
+    const initialFrame = Number(result.ip) || 0
+    const initialValue = propertyValueAtFrame(property, initialFrame, fallback)
+    if (initialFrame !== targetFrame) keyframes.push({ t: initialFrame, s: initialValue })
+  }
+  const existing = keyframes.find((keyframe) => Number(keyframe.t) === targetFrame)
+  if (existing) existing.s = normalized
+  else keyframes.push({ t: targetFrame, s: normalized })
+  keyframes.sort((a, b) => Number(a.t) - Number(b.t))
+  property.a = 1
+  property.k = syncKeyframeEnds(keyframes)
+  return result
+}
+
 export function mergedLottie(source, replacements) {
   const result = structuredClone(source)
   result.assets?.forEach((asset) => {

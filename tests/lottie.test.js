@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import JSZip from 'jszip'
-import { dataUrlToBlob, embeddedImageAssets, fontReferences, matchAssetFiles, parseLottieFile, parseLottieJson, safeBaseName } from '../src/lib/lottie.js'
+import { dataUrlToBlob, embeddedImageAssets, fontReferences, matchAssetFiles, parseLottieFile, parseLottieJson, propertyValueAtFrame, safeBaseName, setLayerTransformValue } from '../src/lib/lottie.js'
 
 const minimal = { v: '5.12.0', w: 200, h: 100, fr: 30, ip: 0, op: 60, layers: [] }
 
@@ -62,4 +62,16 @@ test('lists Lottie font family and style references', () => {
 test('rejects Lottie files larger than 50 MB', async () => {
   const file = { name: 'large.json', size: 50 * 1024 * 1024 + 1, text: async () => '' }
   await assert.rejects(parseLottieFile(file), /larger than 50 MB/)
+})
+
+test('creates native Lottie transform keyframes and interpolates their values', () => {
+  const source = { ...minimal, layers: [{ ind: 1, ks: { p: { a: 0, k: [10, 20, 0] } } }] }
+  const first = setLayerTransformValue(source, 0, 'p', 30, [70, 80, 0], true)
+  assert.equal(first.layers[0].ks.p.a, 1)
+  assert.deepEqual(first.layers[0].ks.p.k.map(({ t, s }) => ({ t, s })), [
+    { t: 0, s: [10, 20, 0] },
+    { t: 30, s: [70, 80, 0] },
+  ])
+  assert.deepEqual(propertyValueAtFrame(first.layers[0].ks.p, 15, [0, 0, 0]), [40, 50, 0])
+  assert.deepEqual(source.layers[0].ks.p.k, [10, 20, 0])
 })

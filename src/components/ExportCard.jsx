@@ -32,7 +32,7 @@ export default function ExportCard() {
   const downloadJson = async () => {
     if (!(await ask({
       title: 'Build JSON?',
-      message: `Download ${base}-rebuilt.json with your current asset replacements.`,
+      message: `Download ${base}-rebuilt.json with your current timeline edits and asset replacements.`,
     }))) return
     try {
       download(new Blob([JSON.stringify(merged)], { type: 'application/json' }), `${base}-rebuilt.json`)

@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { FileJson, FolderInput, Upload } from 'lucide-react'
+import { FileJson, FolderInput, PanelBottomClose, PanelBottomOpen, Upload } from 'lucide-react'
 import AssetList from '../components/AssetList'
+import Button from '../components/Button'
 import Dropzone from '../components/Dropzone'
 import ExportCard from '../components/ExportCard'
 import FilePicker from '../components/FilePicker'
 import Preview from '../components/Preview'
 import StatusToast from '../components/StatusToast'
+import TimelineEditor from '../components/TimelineEditor'
 import { imageAssets } from '../lib/lottie'
 import { useConfirm } from '../state/ConfirmContext'
 import { useWorkspace } from '../state/WorkspaceContext'
 
 export default function Editor() {
-  const { source, sourceName, replacements, notice, notify, loadJsonFile, applyBatch } = useWorkspace()
+  const { source, sourceName, replacements, timelineOpen, setTimelineOpen, notice, notify, loadJsonFile, applyBatch } = useWorkspace()
   const ask = useConfirm()
 
   useEffect(() => {
@@ -63,9 +65,11 @@ export default function Editor() {
     <div className="workspace-summary">
       <div className="file-identity"><span className="file-icon"><FileJson size={20} aria-hidden="true"/></span><div><p title={sourceName}>{sourceName}</p><span>{source.w} × {source.h} · {stats.fps || '?'} fps · {stats.duration.toFixed(1)} sec</span></div></div>
       <div className="summary-stats"><span><strong>{stats.assets}</strong> assets</span><span><strong>{stats.changes}</strong> changes</span></div>
+      <Button icon={timelineOpen ? PanelBottomClose : PanelBottomOpen} onClick={() => setTimelineOpen((open) => !open)} aria-expanded={timelineOpen}>{timelineOpen ? 'Close timeline' : 'Open timeline'}</Button>
       <FilePicker icon={Upload} accept=".json,.lottie,application/json,application/zip" onFiles={openAnother}>Open another</FilePicker>
     </div>
-    <div className="editor-grid"><AssetList/><Preview/></div>
+    <div className={`editor-grid ${timelineOpen ? 'has-timeline' : ''}`}><AssetList/><Preview/></div>
+    {timelineOpen && <TimelineEditor/>}
     <ExportCard/>
     {isDragActive && <div className="drop-overlay"><FolderInput size={28} aria-hidden="true"/><strong>Drop to import</strong><span>JSON opens a project · images apply as a batch</span></div>}
     <StatusToast notice={notice}/>

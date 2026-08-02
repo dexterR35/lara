@@ -465,6 +465,10 @@
     @apply h-full w-full pointer-events-none;
   }
 
+  .is-layer-editing .preview-stage {
+    @apply pointer-events-auto cursor-move;
+  }
+
   .preview-stage svg {
     @apply h-full w-full;
   }
@@ -540,6 +544,194 @@
 
   .frame-count {
     @apply min-w-[72px] text-right font-mono text-[10px];
+    color: var(--color-muted);
+  }
+
+  .layer-position-readout {
+    @apply pointer-events-none absolute left-3 top-3 rounded-md border px-2 py-1 font-mono text-[10px];
+    border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+    background-color: color-mix(in srgb, var(--color-black) 82%, transparent);
+    color: var(--color-primary-subtle);
+  }
+
+  .timeline-panel {
+    @apply flex h-[270px] shrink-0 flex-col overflow-hidden;
+  }
+
+  .timeline-toolbar {
+    @apply flex min-h-12 shrink-0 items-center gap-5 border-b px-4;
+    border-color: var(--color-line);
+  }
+
+  .timeline-toolbar>div {
+    @apply min-w-[220px];
+  }
+
+  .timeline-toolbar h2 {
+    @apply m-0 text-sm font-semibold;
+    color: var(--color-white);
+  }
+
+  .timeline-toolbar output {
+    @apply ml-auto min-w-[130px] text-right font-mono text-xs;
+    color: var(--color-neutral-200);
+  }
+
+  .timeline-toolbar output small,
+  .timeline-tip {
+    color: var(--color-muted);
+  }
+
+  .timeline-tip {
+    @apply flex items-center gap-2 text-[11px];
+  }
+
+  .timeline-scroll {
+    @apply min-h-0 flex-1 overflow-auto;
+    scrollbar-color: var(--color-neutral-700) transparent;
+  }
+
+  .timeline-ruler-row,
+  .timeline-layer-row,
+  .timeline-property-row {
+    @apply grid min-w-[760px] grid-cols-[260px_minmax(500px,1fr)];
+  }
+
+  .timeline-ruler-row {
+    @apply sticky top-0 z-20 h-8 border-b;
+    border-color: var(--color-line);
+    background-color: var(--color-panel);
+  }
+
+  .timeline-ruler-row>strong {
+    @apply flex items-center px-4 text-[10px] uppercase tracking-[.14em];
+    color: var(--color-muted);
+  }
+
+  .timeline-ruler {
+    @apply relative border-l;
+    border-color: var(--color-line);
+    background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), color-mix(in srgb, var(--color-line) 55%, transparent) 10%);
+  }
+
+  .timeline-ruler>span {
+    @apply absolute top-1 -translate-x-1/2 font-mono text-[9px];
+    color: var(--color-neutral-500);
+  }
+
+  .timeline-ruler input {
+    @apply absolute inset-0 z-10 h-full w-full cursor-ew-resize opacity-0;
+  }
+
+  .timeline-playhead {
+    @apply pointer-events-none absolute bottom-0 top-0 z-[9] w-px;
+    background-color: var(--color-primary);
+  }
+
+  .timeline-playhead::before {
+    content: '';
+    @apply absolute -left-1 top-0 h-2 w-2 rotate-45 rounded-[1px];
+    background-color: var(--color-primary);
+  }
+
+  .timeline-layer-row,
+  .timeline-property-row {
+    @apply min-h-8 border-b;
+    border-color: color-mix(in srgb, var(--color-line) 65%, transparent);
+  }
+
+  .timeline-layer-row {
+    @apply cursor-pointer;
+  }
+
+  .timeline-layer-row:hover,
+  .timeline-layer-row.is-selected {
+    background-color: color-mix(in srgb, var(--color-white) 3%, transparent);
+  }
+
+  .timeline-layer-row.is-selected .timeline-layer-name {
+    color: var(--color-white);
+    box-shadow: inset 2px 0 var(--color-primary);
+  }
+
+  .timeline-layer-name,
+  .timeline-property-controls {
+    @apply flex min-w-0 items-center gap-2 border-r px-3 text-[11px];
+    border-color: var(--color-line);
+    color: var(--color-neutral-300);
+  }
+
+  .timeline-layer-name>span {
+    @apply truncate;
+  }
+
+  .layer-disclosure,
+  .keyframe-toggle {
+    @apply grid h-6 w-6 shrink-0 place-items-center rounded border-0 bg-transparent p-0;
+    color: var(--color-muted);
+  }
+
+  .layer-disclosure:hover,
+  .keyframe-toggle:hover,
+  .keyframe-toggle.is-active {
+    background-color: var(--color-neutral-800);
+    color: var(--color-primary-soft);
+  }
+
+  .layer-time-track,
+  .keyframe-track {
+    @apply relative min-h-8;
+    background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), color-mix(in srgb, var(--color-line) 35%, transparent) 10%);
+  }
+
+  .layer-duration {
+    @apply absolute bottom-2 top-2 rounded-sm;
+    background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-neutral-800));
+  }
+
+  .layer-time-track>.keyframe-track {
+    @apply absolute inset-0;
+    background-image: none;
+  }
+
+  .timeline-property-controls {
+    @apply pl-9;
+    color: var(--color-muted);
+  }
+
+  .property-values {
+    @apply ml-auto flex items-center gap-1;
+  }
+
+  .property-values label {
+    @apply flex items-center gap-1 text-[9px];
+    color: var(--color-neutral-500);
+  }
+
+  .property-values input {
+    @apply h-6 w-14 rounded border px-1.5 font-mono text-[10px] outline-none;
+    border-color: var(--color-line);
+    background-color: var(--color-ink);
+    color: var(--color-neutral-200);
+  }
+
+  .property-values input:focus {
+    border-color: var(--color-primary);
+  }
+
+  .keyframe-marker {
+    @apply absolute left-0 top-1/2 z-[5] grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center border-0 bg-transparent p-0;
+    color: var(--color-primary-soft);
+  }
+
+  .keyframe-marker:hover,
+  .keyframe-marker.is-current {
+    color: var(--color-white);
+    filter: drop-shadow(0 0 4px var(--color-primary));
+  }
+
+  .timeline-empty {
+    @apply grid h-24 place-items-center text-xs;
     color: var(--color-muted);
   }
 
@@ -677,7 +869,7 @@
   }
 
   .help-grid {
-    @apply grid gap-4 md:grid-cols-3;
+    @apply grid gap-4 md:grid-cols-2 lg:grid-cols-4;
   }
 
   .help-grid article {

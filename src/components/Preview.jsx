@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Panzoom from '@panzoom/panzoom'
 import { AlertTriangle, Maximize2, Minus, Move, Pause, Play, Plus, RotateCcw, Scan } from 'lucide-react'
+import { propertyValueAtFrame } from '../lib/lottie'
 import { useWorkspace } from '../state/WorkspaceContext'
 import Button from './Button'
 
@@ -9,21 +10,26 @@ const MAX_ZOOM = 8
 const MIN_VISIBLE_EDGE = 48
 
 export default function Preview() {
-  const { merged, replacements, notify } = useWorkspace()
+  const { merged, source, replacements, notify, selectedLayerIndex, setSelectedLayerIndex, currentFrame, setCurrentFrame, seekFrame, timelineOpen, setLayerTransform } = useWorkspace()
   const viewport = useRef(null)
   const artboard = useRef(null)
   const stage = useRef(null)
   const animation = useRef(null)
   const panzoom = useRef(null)
+  const layerDrag = useRef(null)
+  const currentFrameRef = useRef(currentFrame)
   const [playing, setPlaying] = useState(false)
-  const [frame, setFrame] = useState(0)
-  const [total, setTotal] = useState(0)
+  const [dragPosition, setDragPosition] = useState(null)
   const [zoom, setZoom] = useState(1)
   const [previewError, setPreviewError] = useState('')
   const [previewReady, setPreviewReady] = useState(false)
   const replacementCount = useMemo(() => Object.keys(replacements).length, [replacements])
   const width = Math.max(Number(merged.w) || 1, 1)
   const height = Math.max(Number(merged.h) || 1, 1)
+  const firstFrame = Number(source.ip) || 0
+  const lastFrame = Number(source.op) || firstFrame + 1
+
+  useEffect(() => { currentFrameRef.current = currentFrame }, [currentFrame])
 
   const fitCanvas = useCallback((animate = true) => {
     if (!viewport.current || !panzoom.current) return
@@ -93,6 +99,7 @@ export default function Preview() {
     let lastFrameUpdate = 0
     let update
     let failed
+    let ready
 
     async function loadPreview() {
       try {
@@ -111,8 +118,7 @@ export default function Preview() {
           const now = performance.now()
           if (now - lastFrameUpdate < 100) return
           lastFrameUpdate = now
-          setFrame(Math.round(instance.currentFrame))
-          setTotal(Math.round(instance.totalFrames || 0))
+          setCurrentFrame(firstFrame + instance.currentFrame)
         }
         failed = () => {
           setPreviewError('The animation renderer could not load this composition.')
@@ -120,7 +126,11 @@ export default function Preview() {
           notify('Preview could not render this Lottie file.', 'error')
         }
         instance.addEventListener('enterFrame', update)
-        instance.addEventListener('DOMLoaded', update)
+        ready = () => {
+          instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
+          update()
+        }
+        instance.addEventListener('DOMLoaded', ready)
         instance.addEventListener('data_failed', failed)
         setPlaying(false)
         setPreviewReady(true)
@@ -138,13 +148,22 @@ export default function Preview() {
       disposed = true
       if (instance) {
         instance.removeEventListener('enterFrame', update)
-        instance.removeEventListener('DOMLoaded', update)
+        instance.removeEventListener('DOMLoaded', ready)
         instance.removeEventListener('data_failed', failed)
         instance.destroy()
       }
       if (animation.current === instance) animation.current = null
     }
-  }, [merged, notify])
+  }, [firstFrame, merged, notify, setCurrentFrame])
+
+  useEffect(() => {
+    const onSeek = (event) => {
+      animation.current?.goToAndStop(Math.max(0, Number(event.detail) - firstFrame), true)
+      setPlaying(false)
+    }
+    window.addEventListener('lara:seek', onSeek)
+    return () => window.removeEventListener('lara:seek', onSeek)
+  }, [firstFrame])
 
   useEffect(() => {
     const observer = new ResizeObserver(() => fitCanvas(false))
@@ -162,19 +181,54 @@ export default function Preview() {
 
   const restart = () => {
     animation.current?.goToAndPlay(0, true)
+    setCurrentFrame(firstFrame)
     setPlaying(true)
   }
 
   const seek = (value) => {
-    setFrame(value)
-    animation.current?.goToAndStop(value, true)
-    setPlaying(false)
+    seekFrame(value)
+  }
+
+  const startLayerDrag = (event) => {
+    if (!timelineOpen || event.button !== 0) return
+    const named = event.target.closest?.('[data-name]')?.getAttribute('data-name')
+    const namedIndex = named ? source.layers.findIndex((layer) => layer.nm === named) : -1
+    const renderedIndex = animation.current?.renderer?.elements?.findIndex?.((element) => element?.baseElement?.contains?.(event.target)) ?? -1
+    const layerIndex = namedIndex >= 0 ? namedIndex : renderedIndex >= 0 ? renderedIndex : selectedLayerIndex
+    if (layerIndex == null || !source.layers[layerIndex]) return
+    const layer = source.layers[layerIndex]
+    const position = propertyValueAtFrame(layer.ks?.p, currentFrame, [0, 0, 0])
+    const rendered = animation.current?.renderer?.elements?.[layerIndex]?.baseElement || event.target.closest?.('g')
+    setSelectedLayerIndex(layerIndex)
+    layerDrag.current = { layerIndex, startX: event.clientX, startY: event.clientY, position, rendered }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    event.preventDefault()
+  }
+
+  const moveLayer = (event) => {
+    const drag = layerDrag.current
+    if (!drag) return
+    const dx = (event.clientX - drag.startX) / Math.max(zoom, .001)
+    const dy = (event.clientY - drag.startY) / Math.max(zoom, .001)
+    const next = [roundPosition(drag.position[0] + dx), roundPosition(drag.position[1] + dy), drag.position[2] || 0]
+    drag.next = next
+    if (drag.rendered) drag.rendered.style.translate = `${dx}px ${dy}px`
+    setDragPosition(next)
+  }
+
+  const finishLayerDrag = () => {
+    const drag = layerDrag.current
+    if (!drag) return
+    if (drag.rendered) drag.rendered.style.translate = ''
+    if (drag.next) setLayerTransform(drag.layerIndex, 'p', currentFrame, drag.next, true)
+    layerDrag.current = null
+    setDragPosition(null)
   }
 
   return <section className="preview-panel panel" aria-label="Animation preview">
     <div className="preview-heading"><div><p className="eyebrow">Live preview</p><h2>Composition</h2></div><span className="status-live"><span/> {replacementCount ? `${replacementCount} changes applied` : 'Original'}</span></div>
-    <div ref={viewport} className="preview-canvas" onDoubleClick={(event) => !event.target.closest('.panzoom-exclude') && fitCanvas()}>
-      <div ref={artboard} className="preview-artboard" style={{ width, height, marginLeft: -width / 2, marginTop: -height / 2 }}><div ref={stage} className="preview-stage"/></div>
+    <div ref={viewport} className={`preview-canvas ${timelineOpen ? 'is-layer-editing' : ''}`} onDoubleClick={(event) => !event.target.closest('.panzoom-exclude') && fitCanvas()}>
+      <div ref={artboard} className="preview-artboard" style={{ width, height, marginLeft: -width / 2, marginTop: -height / 2 }} onPointerDown={startLayerDrag} onPointerMove={moveLayer} onPointerUp={finishLayerDrag} onPointerCancel={finishLayerDrag}><div ref={stage} className="preview-stage panzoom-exclude"/></div>
       {previewError && <div className="preview-error panzoom-exclude"><AlertTriangle size={24}/><strong>Preview unavailable</strong><span>{previewError}</span></div>}
       <div className="canvas-tools panzoom-exclude">
         <Button variant="icon" icon={Minus} aria-label="Zoom out" title="Zoom out" onClick={() => panzoom.current?.zoomOut({ animate: true })}/>
@@ -184,7 +238,10 @@ export default function Preview() {
         <Button variant="icon" icon={Maximize2} aria-label="Fullscreen" title="Fullscreen" onClick={() => viewport.current?.requestFullscreen?.()}/>
       </div>
       <span className="canvas-hint"><Move size={13}/> Drag or pinch to move · Scroll to zoom · Double-click to fit</span>
+      {dragPosition && <span className="layer-position-readout">X {dragPosition[0]} · Y {dragPosition[1]} · keyframe {Math.round(currentFrame)}</span>}
     </div>
-    <div className="playback"><Button variant="icon" icon={RotateCcw} disabled={!previewReady} aria-label="Restart animation" onClick={restart}/><Button variant="icon" icon={playing ? Pause : Play} disabled={!previewReady} aria-label={playing ? 'Pause' : 'Play'} onClick={toggle}/><input aria-label="Animation frame" type="range" min="0" max={total || 1} value={Math.min(frame, total || 1)} disabled={!previewReady} onChange={(event) => seek(Number(event.target.value))}/><span className="frame-count">{frame} / {total}</span></div>
+    <div className="playback"><Button variant="icon" icon={RotateCcw} disabled={!previewReady} aria-label="Restart animation" onClick={restart}/><Button variant="icon" icon={playing ? Pause : Play} disabled={!previewReady} aria-label={playing ? 'Pause' : 'Play'} onClick={toggle}/><input aria-label="Animation frame" type="range" min={firstFrame} max={lastFrame} value={Math.min(lastFrame, currentFrame)} disabled={!previewReady} onChange={(event) => seek(Number(event.target.value))}/><span className="frame-count">{Math.round(currentFrame)} / {Math.round(lastFrame)}</span></div>
   </section>
 }
+
+const roundPosition = (value) => Math.round(value * 10) / 10

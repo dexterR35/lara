@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { fileToDataUrl, imageAssets, isImageFile, matchAssetFiles, mergedLottie, parseLottieFile, validateLottie } from '../lib/lottie'
+import { fileToDataUrl, imageAssets, isImageFile, matchAssetFiles, mergedLottie, parseLottieFile, setLayerTransformValue, validateLottie } from '../lib/lottie'
 
 export const WORKSPACE_STORAGE_KEY = 'lara.workspace.v2'
 const WorkspaceContext = createContext(null)
@@ -21,6 +21,9 @@ export function WorkspaceProvider({ children }) {
   const [sourceName, setSourceName] = useState(saved.sourceName || '')
   const [replacements, setReplacements] = useState(saved.replacements || {})
   const [selectedId, setSelectedId] = useState(saved.selectedId || null)
+  const [selectedLayerIndex, setSelectedLayerIndex] = useState(null)
+  const [currentFrame, setCurrentFrame] = useState(Number(saved.source?.ip) || 0)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const [notice, setNotice] = useState(null)
   const [storageState, setStorageState] = useState('saved')
 
@@ -48,6 +51,9 @@ export function WorkspaceProvider({ children }) {
     setSourceName(file.name)
     setReplacements({})
     setSelectedId(imageAssets(data)[0]?.id || null)
+    setSelectedLayerIndex(data.layers.length ? 0 : null)
+    setCurrentFrame(Number(data.ip) || 0)
+    setTimelineOpen(false)
     notify(`${file.name} is ready`, 'success')
   }, [notify])
 
@@ -78,12 +84,25 @@ export function WorkspaceProvider({ children }) {
     setSourceName('')
     setReplacements({})
     setSelectedId(null)
+    setSelectedLayerIndex(null)
+    setCurrentFrame(0)
+    setTimelineOpen(false)
     sessionStorage.removeItem(WORKSPACE_STORAGE_KEY)
     notify('Workspace reset')
   }, [notify])
 
+  const seekFrame = useCallback((frame) => {
+    const next = Math.max(Number(source?.ip) || 0, Math.min(Number(source?.op) || 0, Number(frame) || 0))
+    setCurrentFrame(next)
+    window.dispatchEvent(new CustomEvent('lara:seek', { detail: next }))
+  }, [source])
+
+  const setLayerTransform = useCallback((layerIndex, track, frame, value, createKeyframe = false) => {
+    setSource((current) => current ? setLayerTransformValue(current, layerIndex, track, frame, value, createKeyframe) : current)
+  }, [])
+
   const merged = useMemo(() => source ? mergedLottie(source, replacements) : null, [source, replacements])
-  const value = useMemo(() => ({ source, sourceName, replacements, selectedId, setSelectedId, notice, notify, storageState, loadJsonFile, replaceAsset, applyBatch, removeReplacement, reset, merged }), [source, sourceName, replacements, selectedId, notice, notify, storageState, loadJsonFile, replaceAsset, applyBatch, removeReplacement, reset, merged])
+  const value = useMemo(() => ({ source, sourceName, replacements, selectedId, setSelectedId, selectedLayerIndex, setSelectedLayerIndex, currentFrame, setCurrentFrame, seekFrame, timelineOpen, setTimelineOpen, notice, notify, storageState, loadJsonFile, replaceAsset, applyBatch, removeReplacement, setLayerTransform, reset, merged }), [source, sourceName, replacements, selectedId, selectedLayerIndex, currentFrame, seekFrame, timelineOpen, notice, notify, storageState, loadJsonFile, replaceAsset, applyBatch, removeReplacement, setLayerTransform, reset, merged])
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }
