@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { AlertTriangle } from 'lucide-react'
 import Button from './Button'
 
 export default function ConfirmDialog({ title, message, confirmLabel = 'Yes', cancelLabel = 'No', tone = 'default', onConfirm, onCancel }) {
@@ -20,13 +19,19 @@ export default function ConfirmDialog({ title, message, confirmLabel = 'Yes', ca
   }, [onCancel, onConfirm])
 
   return <div className="confirm-backdrop" onClick={onCancel}>
-    <div className={`confirm-dialog panel ${tone === 'danger' ? 'confirm-danger' : ''}`} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" onClick={(event) => event.stopPropagation()}>
-      <div className="confirm-icon" aria-hidden="true"><AlertTriangle size={22}/></div>
+    <div
+      className={`confirm-dialog panel ${tone === 'danger' ? 'confirm-danger' : ''}`}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+      aria-describedby="confirm-message"
+      onClick={(event) => event.stopPropagation()}
+    >
       <h2 id="confirm-title">{title}</h2>
       <p id="confirm-message">{message}</p>
       <div className="confirm-actions">
-        <Button ref={cancelRef} variant="ghost" onClick={onCancel}>{cancelLabel}</Button>
-        <Button variant="primary" onClick={onConfirm}>{confirmLabel}</Button>
+        <Button ref={cancelRef} className="confirm-secondary" onClick={onCancel}>{cancelLabel}</Button>
+        <Button variant="primary" className="confirm-primary" onClick={onConfirm}>{confirmLabel}</Button>
       </div>
     </div>
   </div>

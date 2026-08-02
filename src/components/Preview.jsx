@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Konva from 'konva'
-import { Layer, Rect, Stage, Transformer } from 'react-konva'
+import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Transformer } from 'react-konva'
 import { AlertTriangle, Maximize2, Minus, Move, Pause, Play, Plus, Repeat, RotateCcw, Scan } from 'lucide-react'
-import { propertyValueAtFrame } from '../lib/lottie'
+import { assetSource, propertyValueAtFrame } from '../lib/lottie'
 import { useWorkspace } from '../state/WorkspaceContext'
 import Button from './Button'
 
@@ -13,6 +13,11 @@ const PRIMARY = '#e24848'
 
 const clampZoom = (value) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
 const rounded = (value) => Math.round(value * 100) / 100
+
+function nodeCenter(node) {
+  const bounds = node.getClientRect({ relativeTo: node.getLayer(), skipShadow: true, skipStroke: true })
+  return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+}
 
 function layerTransform(layer, frame) {
   const position = propertyValueAtFrame(layer.ks?.p, frame, [0, 0, 0])
@@ -55,6 +60,7 @@ function imageLayerBounds(layer, index, layers, assets, frame, cache) {
       skewY: decomposed.skewY,
     },
     parent,
+    asset,
   }
 }
 
@@ -80,7 +86,13 @@ export default function Preview() {
   const stageRef = useRef(null)
   const transformerRef = useRef(null)
   const nodeRefs = useRef(new Map())
+  const visualRefs = useRef(new Map())
+  const imageCache = useRef(new Map())
+  const hiddenSvgLayers = useRef(new Set())
+  const pendingVisualCommit = useRef(false)
+  const guideRefs = useRef(new Map())
   const interaction = useRef(null)
+  const selectedLayerIndicesRef = useRef(selectedLayerIndices)
   const animation = useRef(null)
   const currentFrameRef = useRef(currentFrame)
   const [playing, setPlaying] = useState(false)
@@ -89,6 +101,9 @@ export default function Preview() {
   const [previewReady, setPreviewReady] = useState(false)
   const [viewportSize, setViewportSize] = useState({ width: 1, height: 1 })
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
+  const [motionGuides, setMotionGuides] = useState([])
+  const [activeVisualIndices, setActiveVisualIndices] = useState([])
+  const [, refreshImages] = useState(0)
   const replacementCount = useMemo(() => Object.keys(replacements).length, [replacements])
   const width = Math.max(Number(merged.w) || 1, 1)
   const height = Math.max(Number(merged.h) || 1, 1)
@@ -97,12 +112,38 @@ export default function Preview() {
   const editableLayers = useMemo(() => {
     const cache = new Map()
     return source.layers.map((layer, index) => {
+      const starts = Number(layer.ip ?? firstFrame)
+      const ends = Number(layer.op ?? lastFrame)
+      const opacity = Number(propertyValueAtFrame(layer.ks?.o, currentFrame, 100))
+      if (layer.hd || currentFrame < starts || currentFrame >= ends || opacity <= 0) return null
       const geometry = imageLayerBounds(layer, index, source.layers, source.assets || [], currentFrame, cache)
-      return geometry ? { layer, index, bounds: geometry.attrs, parentTransform: geometry.parent } : null
+      return geometry ? { layer, index, bounds: geometry.attrs, parentTransform: geometry.parent, asset: geometry.asset, previewSrc: replacements[geometry.asset.id]?.dataUrl || assetSource(geometry.asset) } : null
     }).filter(Boolean)
-  }, [currentFrame, source.assets, source.layers])
+  }, [currentFrame, firstFrame, lastFrame, replacements, source.assets, source.layers])
+  const hitLayers = useMemo(() => [...editableLayers].reverse(), [editableLayers])
+  const imageSourcesKey = editableLayers.map(({ previewSrc }) => previewSrc).join('|')
+  const selectionKey = selectedLayerIndices.join(',')
 
   useEffect(() => { currentFrameRef.current = currentFrame }, [currentFrame])
+  useEffect(() => { selectedLayerIndicesRef.current = selectedLayerIndices }, [selectedLayerIndices])
+  useEffect(() => { if (!interaction.current) setMotionGuides([]) }, [selectionKey])
+
+  useEffect(() => {
+    let disposed = false
+    editableLayers.forEach(({ previewSrc }) => {
+      if (!previewSrc || imageCache.current.has(previewSrc)) return
+      const image = new window.Image()
+      const entry = { image, ready: false }
+      imageCache.current.set(previewSrc, entry)
+      image.onload = () => {
+        entry.ready = true
+        if (!disposed) refreshImages((version) => version + 1)
+      }
+      image.onerror = () => { entry.failed = true }
+      image.src = previewSrc
+    })
+    return () => { disposed = true }
+  }, [imageSourcesKey])
 
   const fitCanvas = useCallback(() => {
     const scale = clampZoom(Math.min((viewportSize.width - 64) / width, (viewportSize.height - 64) / height))
@@ -131,6 +172,7 @@ export default function Preview() {
     let instance
     let update
     let ready
+    let domReady
     let loadedImages
     let failed
     let lastFrameUpdate = 0
@@ -165,10 +207,26 @@ export default function Preview() {
           instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
           setPreviewReady(true)
         }
+        const finishVisualCommit = () => {
+          if (!pendingVisualCommit.current) return
+          hiddenSvgLayers.current.forEach((element) => { element.style.visibility = '' })
+          hiddenSvgLayers.current.clear()
+          pendingVisualCommit.current = false
+          setActiveVisualIndices([])
+        }
+        domReady = () => {
+          ready()
+          finishVisualCommit()
+        }
         loadedImages = () => {
           instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
+          finishVisualCommit()
         }
         failed = () => {
+          hiddenSvgLayers.current.forEach((element) => { element.style.visibility = '' })
+          hiddenSvgLayers.current.clear()
+          pendingVisualCommit.current = false
+          setActiveVisualIndices([])
           setPreviewError('The animation renderer could not load this composition.')
           setPreviewReady(false)
           notify('Preview could not render this Lottie file.', 'error')
@@ -177,7 +235,7 @@ export default function Preview() {
         instance.addEventListener('drawnFrame', update)
         instance.addEventListener('config_ready', ready)
         instance.addEventListener('data_ready', ready)
-        instance.addEventListener('DOMLoaded', ready)
+        instance.addEventListener('DOMLoaded', domReady)
         instance.addEventListener('loaded_images', loadedImages)
         instance.addEventListener('data_failed', failed)
         setPlaying(false)
@@ -197,7 +255,7 @@ export default function Preview() {
         instance.removeEventListener('drawnFrame', update)
         instance.removeEventListener('config_ready', ready)
         instance.removeEventListener('data_ready', ready)
-        instance.removeEventListener('DOMLoaded', ready)
+        instance.removeEventListener('DOMLoaded', domReady)
         instance.removeEventListener('loaded_images', loadedImages)
         instance.removeEventListener('data_failed', failed)
         instance.destroy()
@@ -286,23 +344,79 @@ export default function Preview() {
     setPlaying(true)
   }
 
+  const syncVisualToNode = (entry) => {
+    const visual = visualRefs.current.get(entry.item.index)
+    if (!visual?.image()) return false
+    visual.setAttrs({
+      x: entry.node.x(),
+      y: entry.node.y(),
+      scaleX: entry.node.scaleX(),
+      scaleY: entry.node.scaleY(),
+      rotation: entry.node.rotation(),
+      skewX: entry.node.skewX(),
+      skewY: entry.node.skewY(),
+      visible: true,
+    })
+    return true
+  }
+
+  const hideSvgLayer = (entry) => {
+    const host = svgHost.current
+    if (!host) return
+    const sourceValue = entry.item.previewSrc
+    const assetPath = String(entry.item.asset.p || '')
+    const sameAssetBefore = source.layers.slice(0, entry.item.index).filter((layer) => layer.refId === entry.item.layer.refId).length
+    const candidates = [...host.querySelectorAll('image')].filter((element) => {
+      if (element.closest('defs')) return false
+      const href = element.getAttribute('href') || element.getAttribute('xlink:href') || ''
+      return href === sourceValue || href.endsWith(sourceValue) || (assetPath && href.endsWith(assetPath))
+    })
+    const element = candidates[sameAssetBefore] || candidates[0]
+    if (!element) return
+    element.style.visibility = 'hidden'
+    hiddenSvgLayers.current.add(element)
+  }
+
+  const valuesAfterInteraction = (entry) => {
+    const anchor = entry.anchor
+    const local = entry.parentInverse.copy().multiply(entry.node.getTransform().copy())
+    local.translate(Number(anchor[0]) || 0, Number(anchor[1]) || 0)
+    const value = local.decompose()
+    const finite = (candidate, fallback) => Number.isFinite(candidate) ? rounded(candidate) : Number(fallback) || 0
+    const scale = (candidate, fallback) => {
+      if (!Number.isFinite(candidate)) return Number(fallback) || 100
+      const sign = candidate < 0 ? -1 : 1
+      return rounded(sign * Math.min(10000, Math.max(.1, Math.abs(candidate * 100))))
+    }
+    return {
+      position: [finite(value.x, entry.oldPosition[0]), finite(value.y, entry.oldPosition[1]), entry.oldPosition[2] || 0],
+      scale: [scale(value.scaleX, entry.oldScale[0]), scale(value.scaleY, entry.oldScale[1]), entry.oldScale[2] ?? 100],
+      rotation: finite(value.rotation, entry.oldRotation),
+    }
+  }
+
   const beginInteraction = (item, node) => {
     if (interaction.current) return
-    const indices = selectedLayerIndices.includes(item.index) ? selectedLayerIndices : [item.index]
+    const currentSelection = selectedLayerIndicesRef.current
+    const indices = currentSelection.includes(item.index) ? currentSelection : [item.index]
     const items = new Map(editableLayers.map((editable) => [editable.index, editable]))
     const entries = indices.map((index) => {
       const editable = items.get(index)
       const target = nodeRefs.current.get(index)
       const layer = source.layers[index]
       if (!editable || !target || !layer) return null
+      const center = nodeCenter(target)
+      const oldPosition = propertyValueAtFrame(layer.ks?.p, currentFrame, [0, 0, 0])
       return {
         item: editable,
         node: target,
+        guideStart: center,
         worldPoint: { x: target.x(), y: target.y() },
-        position: propertyValueAtFrame(layer.ks?.p, currentFrame, [0, 0, 0]),
+        anchor: propertyValueAtFrame(layer.ks?.a, currentFrame, [0, 0, 0]),
+        oldPosition,
         oldScale: propertyValueAtFrame(layer.ks?.s, currentFrame, [100, 100, 100]),
+        oldRotation: propertyValueAtFrame(layer.ks?.r, currentFrame, 0),
         parentInverse: editable.parentTransform.copy().invert(),
-        parentDecomposition: editable.parentTransform.decompose(),
       }
     }).filter(Boolean)
     interaction.current = {
@@ -310,42 +424,53 @@ export default function Preview() {
       activePoint: { x: node.x(), y: node.y() },
       entries,
     }
+    const visualEntries = entries.filter(syncVisualToNode)
+    setActiveVisualIndices(visualEntries.map((entry) => entry.item.index))
+    visualEntries.forEach(hideSvgLayer)
+    setMotionGuides(entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: entry.guideStart })))
     animation.current?.pause()
     setPlaying(false)
   }
 
-  const localPositionAfterInteraction = (entry) => {
-    const from = entry.parentInverse.point(entry.worldPoint)
-    const to = entry.parentInverse.point({ x: entry.node.x(), y: entry.node.y() })
-    return [rounded(entry.position[0] + to.x - from.x), rounded(entry.position[1] + to.y - from.y), entry.position[2] || 0]
-  }
-
   const moveSelection = (item, node) => {
     const current = interaction.current
-    if (!current || current.activeIndex !== item.index || current.entries.length < 2) return
+    if (!current || current.activeIndex !== item.index) return
     const dx = node.x() - current.activePoint.x
     const dy = node.y() - current.activePoint.y
+    if (current.entries.length > 1) {
+      current.entries.forEach((entry) => {
+        if (entry.item.index !== item.index) entry.node.position({ x: entry.worldPoint.x + dx, y: entry.worldPoint.y + dy })
+      })
+    }
     current.entries.forEach((entry) => {
-      if (entry.item.index !== item.index) entry.node.position({ x: entry.worldPoint.x + dx, y: entry.worldPoint.y + dy })
+      syncVisualToNode(entry)
+      const guide = guideRefs.current.get(entry.item.index)
+      const end = nodeCenter(entry.node)
+      guide?.line?.points([entry.guideStart.x, entry.guideStart.y, end.x, end.y])
+      guide?.end?.position(end)
     })
     transformerRef.current?.forceUpdate()
+    transformerRef.current?.getLayer()?.batchDraw()
   }
 
   const commitPosition = () => {
     const current = interaction.current
     if (!current) return
-    current.entries.forEach((entry) => setLayerTransform(entry.item.index, 'p', currentFrame, localPositionAfterInteraction(entry), true))
+    setMotionGuides(current.entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: nodeCenter(entry.node) })))
+    pendingVisualCommit.current = true
+    current.entries.forEach((entry) => setLayerTransform(entry.item.index, 'p', currentFrame, valuesAfterInteraction(entry).position, true))
     interaction.current = null
   }
 
   const commitTransform = () => {
     const current = interaction.current
     if (!current) return
+    pendingVisualCommit.current = true
     current.entries.forEach((entry) => {
-      const parent = entry.parentDecomposition
-      setLayerTransform(entry.item.index, 'p', currentFrame, localPositionAfterInteraction(entry), true)
-      setLayerTransform(entry.item.index, 's', currentFrame, [rounded(entry.node.scaleX() / Math.max(Math.abs(parent.scaleX), .0001) * 100), rounded(entry.node.scaleY() / Math.max(Math.abs(parent.scaleY), .0001) * 100), entry.oldScale[2] ?? 100], true)
-      setLayerTransform(entry.item.index, 'r', currentFrame, rounded(entry.node.rotation() - parent.rotation), true)
+      const values = valuesAfterInteraction(entry)
+      setLayerTransform(entry.item.index, 'p', currentFrame, values.position, true)
+      setLayerTransform(entry.item.index, 's', currentFrame, values.scale, true)
+      setLayerTransform(entry.item.index, 'r', currentFrame, values.rotation, true)
     })
     interaction.current = null
   }
@@ -357,15 +482,24 @@ export default function Preview() {
     if (item && node) beginInteraction(item, node)
   }
 
+  const transformSelection = () => {
+    interaction.current?.entries.forEach(syncVisualToNode)
+    transformerRef.current?.getLayer()?.batchDraw()
+  }
+
   const selectFromPointer = (item, event) => {
     event.cancelBubble = true
     const additive = event.evt?.metaKey || event.evt?.ctrlKey || event.evt?.shiftKey
-    if (additive) selectLayer(item.index, true)
-    else if (!selectedLayerIndices.includes(item.index)) selectLayer(item.index)
+    const current = selectedLayerIndicesRef.current
+    const next = additive
+      ? current.includes(item.index) ? current.filter((index) => index !== item.index) : [...current, item.index]
+      : [item.index]
+    selectedLayerIndicesRef.current = next
+    selectLayer(item.index, additive)
   }
 
   return <section className="preview-panel panel" aria-label="Animation preview">
-    <div className="preview-heading"><div><p className="eyebrow">Live preview</p><h2>Composition</h2></div><span className="status-live"><span/> {replacementCount ? `${replacementCount} changes applied` : 'Original'}</span></div>
+    <div className="preview-heading"><div><p className="eyebrow">Live preview</p></div><span className="status-live"><span/> {replacementCount ? `${replacementCount} changes applied` : 'Original'}</span></div>
     <div ref={viewport} className={`preview-canvas konva-preview ${timelineOpen ? 'is-layer-editing' : ''}`}>
       <div ref={svgHost} className="lottie-svg-host" style={{ width, height, transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}/>
       <Stage
@@ -380,7 +514,29 @@ export default function Preview() {
         onWheel={handleWheel}
       >
         <Layer>
-          {editableLayers.map((item) => <Rect
+          {hitLayers.map((item) => {
+            const cached = imageCache.current.get(item.previewSrc)
+            return <KonvaImage
+              {...item.bounds}
+              key={`visual-${item.layer.ind ?? item.index}-${item.layer.refId}`}
+              ref={(node) => node ? visualRefs.current.set(item.index, node) : visualRefs.current.delete(item.index)}
+              image={cached?.ready ? cached.image : undefined}
+              visible={activeVisualIndices.includes(item.index)}
+              listening={false}
+            />
+          })}
+          {motionGuides.map((guide) => {
+            const distance = Math.hypot(guide.end.x - guide.start.x, guide.end.y - guide.start.y)
+            return <Group key={`motion-${guide.index}`} listening={false} visible={distance > .5} ref={(node) => {
+              if (!node) guideRefs.current.delete(guide.index)
+              else guideRefs.current.set(guide.index, { line: node.findOne('.motion-line'), end: node.findOne('.motion-end') })
+            }}>
+              <Line name="motion-line" points={[guide.start.x, guide.start.y, guide.end.x, guide.end.y]} stroke={PRIMARY} strokeWidth={1.25 / view.scale} dash={[1.5 / view.scale, 5 / view.scale]} lineCap="round" opacity={.9}/>
+              <Circle x={guide.start.x} y={guide.start.y} radius={3.5 / view.scale} fill="#111318" stroke="#ffffff" strokeWidth={1 / view.scale}/>
+              <Circle name="motion-end" x={guide.end.x} y={guide.end.y} radius={3.5 / view.scale} fill={PRIMARY} stroke="#ffffff" strokeWidth={1 / view.scale}/>
+            </Group>
+          })}
+          {hitLayers.map((item) => <Rect
             {...item.bounds}
             key={`${item.layer.ind ?? item.index}-${item.layer.refId}`}
             ref={(node) => node ? nodeRefs.current.set(item.index, node) : nodeRefs.current.delete(item.index)}
@@ -399,7 +555,7 @@ export default function Preview() {
           <Transformer
             ref={transformerRef}
             onTransformStart={beginSelectedTransform}
-            onTransform={() => transformerRef.current?.getLayer()?.batchDraw()}
+            onTransform={transformSelection}
             onTransformEnd={commitTransform}
             onMouseEnter={() => setHoveredLayerIndex(selectedLayerIndices.at(-1) ?? null)}
             onMouseLeave={() => setHoveredLayerIndex(null)}
@@ -415,6 +571,12 @@ export default function Preview() {
             borderStrokeWidth={1 / Math.max(view.scale, .65)}
             rotateAnchorOffset={20 / Math.max(view.scale, .65)}
             anchorStyleFunc={(anchor) => anchor.hitStrokeWidth(18 / view.scale)}
+            boundBoxFunc={(oldBox, newBox) => {
+              const minimum = 4 / view.scale
+              const maximum = Math.max(width, height) * 20
+              if (Math.abs(newBox.width) < minimum || Math.abs(newBox.height) < minimum || Math.abs(newBox.width) > maximum || Math.abs(newBox.height) > maximum) return oldBox
+              return newBox
+            }}
             keepRatio={false}
           />
         </Layer>

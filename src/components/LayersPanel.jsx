@@ -54,7 +54,7 @@ export default function LayersPanel() {
 
   return <section className="layers-panel panel" aria-label="Composition layers">
     <div className="panel-heading">
-      <div><p className="eyebrow">Composition</p><h2>{source.layers.length} layers</h2></div>
+      <div><h2>{source.layers.length} layers</h2></div>
       <span className={`count-pill ${Object.keys(replacements).length ? 'is-edited' : 'is-clean'}`}>{Object.keys(replacements).length} edited</span>
     </div>
     <label className="search-field">
