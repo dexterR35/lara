@@ -150,7 +150,7 @@
   }
 
   .app-main {
-    @apply mx-auto flex min-h-0 w-full max-w-[1560px] flex-1 flex-col overflow-hidden px-4 py-3 md:px-7;
+    @apply mx-auto flex min-h-0 w-full max-w-[1921px] flex-1 flex-col overflow-hidden px-4 py-3 md:px-7;
   }
 
   .button {
@@ -176,6 +176,17 @@
     background-color: var(--color-primary-hover);
   }
 
+  .button.is-active {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary);
+    color: var(--color-white);
+  }
+
+  .button.is-active:hover {
+    border-color: var(--color-primary-soft);
+    background-color: var(--color-primary-hover);
+  }
+
   .button-ghost {
     border-color: transparent;
     background-color: transparent;
@@ -187,7 +198,7 @@
   }
 
   .button-icon {
-    @apply h-9 w-9 p-0;
+    @apply h-7 w-7 p-0;
   }
 
   .panel {
@@ -304,11 +315,11 @@
   }
 
   .editor-grid {
-    @apply grid min-h-0 flex-1 gap-2 lg:grid-cols-[390px_minmax(0,1fr)];
+    @apply grid min-h-0 flex-1 gap-2 md:grid-cols-[330px_minmax(0,1fr)] lg:grid-cols-[390px_minmax(0,1fr)];
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .asset-panel,
+  .layers-panel,
   .preview-panel {
     @apply flex min-h-0 flex-col overflow-hidden;
   }
@@ -361,27 +372,6 @@
     color: var(--color-neutral-600);
   }
 
-  .asset-list {
-    @apply min-h-0 flex-1 overscroll-contain overflow-y-auto border-y;
-    border-color: var(--color-line);
-    scrollbar-color: var(--color-neutral-700) transparent;
-  }
-
-  .asset-row {
-    @apply grid w-full grid-cols-[48px_minmax(0,_1fr)_auto] items-center gap-3 border-b px-3 py-2.5 text-left transition;
-    border-color: color-mix(in srgb, var(--color-line) 70%, transparent);
-    background-color: transparent;
-  }
-
-  .asset-row:hover {
-    background-color: color-mix(in srgb, var(--color-white) 2.5%, transparent);
-  }
-
-  .asset-row.is-selected {
-    border-left: 2px solid var(--color-primary);
-    background-color: color-mix(in srgb, var(--color-primary-hover) 7%, transparent);
-  }
-
   .thumbnail {
     @apply grid h-12 w-12 place-items-center overflow-hidden rounded-lg border;
     border-color: var(--color-line);
@@ -391,34 +381,6 @@
 
   .thumbnail img {
     @apply h-full w-full object-contain;
-  }
-
-  .asset-copy {
-    @apply min-w-0;
-  }
-
-  .asset-copy strong {
-    @apply block truncate text-xs font-semibold;
-    color: var(--color-neutral-200);
-  }
-
-  .asset-copy small {
-    @apply mt-1 block truncate text-[11px];
-    color: var(--color-muted);
-  }
-
-  .asset-meta {
-    @apply text-right;
-  }
-
-  .asset-meta small {
-    @apply block text-[10px];
-    color: var(--color-neutral-500);
-  }
-
-  .asset-meta em {
-    @apply mt-1 flex items-center justify-end gap-1 text-[10px] not-italic;
-    color: var(--color-success);
   }
 
   .empty-list {
@@ -443,6 +405,72 @@
     color: var(--color-neutral-500);
   }
 
+  .layer-sidebar-list {
+    @apply min-h-0 flex-1 overflow-y-auto border-y;
+    border-color: var(--color-line);
+    scrollbar-color: var(--color-neutral-700) transparent;
+  }
+
+  .layer-sidebar-row {
+    @apply grid w-full grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2 border-0 border-b px-3 py-2 text-left;
+    border-color: color-mix(in srgb, var(--color-line) 70%, transparent);
+    background-color: transparent;
+    color: var(--color-neutral-300);
+  }
+
+  .layer-sidebar-row:hover {
+    background-color: color-mix(in srgb, var(--color-white) 3%, transparent);
+  }
+
+  .layer-sidebar-row.is-hovered:not(.is-selected) {
+    box-shadow: inset 2px 0 color-mix(in srgb, var(--color-primary) 65%, transparent);
+    background-color: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  }
+
+  .layer-sidebar-row.is-selected {
+    box-shadow: inset 2px 0 var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  }
+
+  .layer-sidebar-icon {
+    @apply grid h-8 w-8 place-items-center rounded-md;
+    background-color: var(--color-neutral-800);
+    color: var(--color-muted);
+  }
+
+  .layer-sidebar-row.is-selected .layer-sidebar-icon {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+  }
+
+  .layer-sidebar-icon .thumbnail {
+    @apply h-8 w-8 rounded-md border-0;
+  }
+
+  .layer-sidebar-row>span:nth-child(2) {
+    @apply min-w-0;
+  }
+
+  .layer-sidebar-row strong,
+  .layer-sidebar-row small {
+    @apply block truncate not-italic;
+  }
+
+  .layer-sidebar-row strong {
+    @apply text-xs font-semibold;
+  }
+
+  .layer-sidebar-row small,
+  .layer-sidebar-row em {
+    @apply mt-0.5 text-[10px] not-italic;
+    color: var(--color-neutral-500);
+  }
+
+  .layers-panel-hint {
+    @apply m-0 px-3 py-2 text-[10px];
+    color: var(--color-muted);
+  }
+
   .status-live {
     @apply flex items-center gap-2 text-[11px];
     color: var(--color-muted);
@@ -456,25 +484,22 @@
     background-size: 22px 22px;
   }
 
-  .preview-artboard {
-    @apply absolute left-1/2 top-1/2 overflow-hidden will-change-transform;
-    background-color: transparent;
+  .lottie-svg-host {
+    @apply pointer-events-none absolute left-0 top-0;
+    transform-origin: 0 0;
   }
 
-  .preview-stage {
-    @apply h-full w-full pointer-events-none;
+  .lottie-svg-host>svg {
+    @apply block h-full w-full;
   }
 
-  .is-layer-editing .preview-stage {
-    @apply pointer-events-auto cursor-move;
-  }
-
-  .preview-stage svg {
-    @apply h-full w-full;
+  .konva-preview .konvajs-content {
+    @apply relative cursor-default;
+    z-index: 1;
   }
 
   .preview-error {
-    @apply absolute left-1/2 top-1/2 z-10 flex max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-xl border p-5 text-center backdrop-blur-md;
+    @apply pointer-events-none absolute left-1/2 top-1/2 z-20 flex max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-xl border p-5 text-center backdrop-blur-md;
     border-color: color-mix(in srgb, var(--color-primary-hover) 30%, transparent);
     background-color: color-mix(in srgb, var(--color-black) 80%, transparent);
     color: var(--color-primary-subtle);
@@ -491,7 +516,7 @@
   }
 
   .canvas-tools {
-    @apply absolute right-3 top-3 flex items-center gap-1 rounded-[10px] border p-1 backdrop-blur-md;
+    @apply absolute right-3 top-3 z-20 flex items-center gap-1 rounded-[10px] border p-1 backdrop-blur-md;
     border-color: var(--color-line);
     background-color: color-mix(in srgb, var(--color-black) 75%, transparent);
   }
@@ -522,7 +547,7 @@
   }
 
   .canvas-hint {
-    @apply pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] opacity-70 backdrop-blur;
+    @apply pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] opacity-70 backdrop-blur;
     border-color: var(--color-line);
     background-color: color-mix(in srgb, var(--color-black) 65%, transparent);
     color: var(--color-neutral-400);
@@ -547,15 +572,8 @@
     color: var(--color-muted);
   }
 
-  .layer-position-readout {
-    @apply pointer-events-none absolute left-3 top-3 rounded-md border px-2 py-1 font-mono text-[10px];
-    border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
-    background-color: color-mix(in srgb, var(--color-black) 82%, transparent);
-    color: var(--color-primary-subtle);
-  }
-
   .timeline-panel {
-    @apply flex h-[270px] shrink-0 flex-col overflow-hidden;
+    @apply flex h-[240px] shrink-0 flex-col overflow-hidden;
   }
 
   .timeline-toolbar {
@@ -594,7 +612,7 @@
   .timeline-ruler-row,
   .timeline-layer-row,
   .timeline-property-row {
-    @apply grid min-w-[760px] grid-cols-[260px_minmax(500px,1fr)];
+    @apply grid min-w-[860px] grid-cols-[340px_minmax(500px,1fr)];
   }
 
   .timeline-ruler-row {
@@ -645,8 +663,13 @@
   }
 
   .timeline-layer-row:hover,
+  .timeline-layer-row.is-hovered,
   .timeline-layer-row.is-selected {
     background-color: color-mix(in srgb, var(--color-white) 3%, transparent);
+  }
+
+  .timeline-layer-row.is-selected {
+    background-color: color-mix(in srgb, var(--color-primary) 14%, transparent);
   }
 
   .timeline-layer-row.is-selected .timeline-layer-name {
@@ -700,23 +723,23 @@
   }
 
   .property-values {
-    @apply ml-auto flex items-center gap-1;
+    @apply ml-auto flex items-center gap-2;
   }
 
   .property-values label {
-    @apply flex items-center gap-1 text-[9px];
+    @apply flex min-w-0 items-center gap-1.5 text-[9px];
     color: var(--color-neutral-500);
   }
 
-  .property-values input {
-    @apply h-6 w-14 rounded border px-1.5 font-mono text-[10px] outline-none;
-    border-color: var(--color-line);
-    background-color: var(--color-ink);
-    color: var(--color-neutral-200);
+  .property-values input[type='range'] {
+    @apply h-1 w-16 cursor-pointer appearance-none rounded;
+    background-color: var(--color-neutral-700);
+    accent-color: var(--color-primary);
   }
 
-  .property-values input:focus {
-    border-color: var(--color-primary);
+  .property-values output {
+    @apply min-w-8 text-right font-mono text-[10px] tabular-nums;
+    color: var(--color-neutral-200);
   }
 
   .keyframe-marker {
@@ -892,9 +915,10 @@
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 767px) {
   .editor-grid {
-    grid-template-rows: minmax(0, .9fr) minmax(0, 1.1fr);
+    @apply overflow-y-auto;
+    grid-template-rows: minmax(360px, .9fr) minmax(420px, 1.1fr);
   }
 }
 

@@ -6,6 +6,22 @@ import { useWorkspace } from '../state/WorkspaceContext'
 const layerIcon = (type) => type === 2 ? Image : type === 5 ? Type : Layers3
 const round = (value) => Math.round(Number(value) * 100) / 100
 
+function rangeOptions(key, dimensionIndex, value, width, height) {
+  const current = Number(value) || 0
+  if (key === 'o') return { min: 0, max: 100, step: 1 }
+  if (key === 's') {
+    const max = Math.max(300, Math.ceil(Math.abs(current) / 50) * 50 + 50)
+    return { min: 0, max, step: 1 }
+  }
+  if (key === 'r') {
+    const extent = Math.max(180, Math.ceil(Math.abs(current) / 45) * 45)
+    return { min: -extent, max: extent, step: 1 }
+  }
+  const axis = dimensionIndex === 0 ? width : height
+  const span = Math.max(axis, Math.ceil(Math.abs(current) / 50) * 50 + axis * 0.25)
+  return { min: Math.min(-span * 0.25, current), max: Math.max(span, current), step: 1 }
+}
+
 function KeyframeMarkers({ keyframes, start, end, currentFrame, onSeek }) {
   const duration = Math.max(1, end - start)
   return <div className="keyframe-track">
@@ -17,7 +33,7 @@ function KeyframeMarkers({ keyframes, start, end, currentFrame, onSeek }) {
   </div>
 }
 
-function TrackRow({ definition, property, layerIndex, frame, start, end, setLayerTransform, seekFrame }) {
+function TrackRow({ definition, property, layerIndex, frame, start, end, width, height, setLayerTransform, seekFrame }) {
   const fallback = definition.fallback
   const rawValue = propertyValueAtFrame(property, frame, fallback)
   const values = Array.isArray(rawValue) ? rawValue : [rawValue]
@@ -36,14 +52,30 @@ function TrackRow({ definition, property, layerIndex, frame, start, end, setLaye
       <button type="button" className={`keyframe-toggle ${hasKeyframe ? 'is-active' : ''}`} onClick={() => setLayerTransform(layerIndex, definition.key, frame, rawValue, true)} title={`Add ${definition.label.toLowerCase()} keyframe`} aria-label={`Add ${definition.label.toLowerCase()} keyframe`}><Diamond size={11} fill={hasKeyframe ? 'currentColor' : 'none'}/></button>
       <span>{definition.label}</span>
       <span className="property-values">
-        {definition.dimensions.map((label, index) => <label key={label}><span>{label}</span><input type="number" step="any" value={round(values[index] ?? values[0] ?? 0)} onChange={(event) => changeDimension(index, event.target.value)}/></label>)}
+        {definition.dimensions.map((label, index) => {
+          const value = round(values[index] ?? values[0] ?? 0)
+          const range = rangeOptions(definition.key, index, value, width, height)
+          return <label key={label}>
+            <span>{label}</span>
+            <input
+              type="range"
+              min={range.min}
+              max={range.max}
+              step={range.step}
+              value={Math.min(range.max, Math.max(range.min, value))}
+              onChange={(event) => changeDimension(index, event.target.value)}
+              aria-label={`${definition.label} ${label}`}
+            />
+            <output>{value}</output>
+          </label>
+        })}
       </span>
     </div>
     <KeyframeMarkers keyframes={keyframes} start={start} end={end} currentFrame={frame} onSeek={seekFrame}/>
   </div>
 }
 
-function LayerRow({ layer, index, selected, expanded, onSelect, onToggle, frame, start, end, setLayerTransform, seekFrame }) {
+function LayerRow({ layer, index, selected, hovered, expanded, onSelect, onHover, onLeave, onToggle, frame, start, end, width, height, setLayerTransform, seekFrame }) {
   const Icon = layerIcon(layer.ty)
   const allKeyframes = useMemo(() => {
     const frames = new Set()
@@ -52,7 +84,7 @@ function LayerRow({ layer, index, selected, expanded, onSelect, onToggle, frame,
   }, [layer])
 
   return <>
-    <div className={`timeline-layer-row ${selected ? 'is-selected' : ''}`} onClick={onSelect}>
+    <div className={`timeline-layer-row ${selected ? 'is-selected' : ''} ${hovered ? 'is-hovered' : ''}`} onMouseEnter={onHover} onMouseLeave={onLeave} onClick={onSelect}>
       <div className="timeline-layer-name">
         <button type="button" className="layer-disclosure" onClick={(event) => { event.stopPropagation(); onToggle() }} aria-label={expanded ? 'Collapse layer' : 'Expand layer'}>{expanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
         <Icon size={14}/><span title={layer.nm || `Layer ${index + 1}`}>{layer.nm || `Layer ${index + 1}`}</span>
@@ -62,16 +94,18 @@ function LayerRow({ layer, index, selected, expanded, onSelect, onToggle, frame,
         <KeyframeMarkers keyframes={allKeyframes} start={start} end={end} currentFrame={frame} onSeek={seekFrame}/>
       </div>
     </div>
-    {expanded && TRANSFORM_TRACKS.map((definition) => <TrackRow key={definition.key} definition={definition} property={layer.ks?.[definition.key]} layerIndex={index} frame={frame} start={start} end={end} setLayerTransform={setLayerTransform} seekFrame={seekFrame}/>)}
+    {expanded && TRANSFORM_TRACKS.map((definition) => <TrackRow key={definition.key} definition={definition} property={layer.ks?.[definition.key]} layerIndex={index} frame={frame} start={start} end={end} width={width} height={height} setLayerTransform={setLayerTransform} seekFrame={seekFrame}/>)}
   </>
 }
 
 export default function TimelineEditor() {
-  const { source, selectedLayerIndex, setSelectedLayerIndex, currentFrame, seekFrame, setLayerTransform } = useWorkspace()
+  const { source, selectedLayerIndices, selectLayer, hoveredLayerIndex, setHoveredLayerIndex, currentFrame, seekFrame, setLayerTransform } = useWorkspace()
   const [expanded, setExpanded] = useState(() => new Set())
   const start = Number(source.ip) || 0
   const end = Number(source.op) || 1
   const fps = Number(source.fr) || 1
+  const width = Math.max(Number(source.w) || 1, 1)
+  const height = Math.max(Number(source.h) || 1, 1)
   const layers = source.layers || []
   const ticks = useMemo(() => Array.from({ length: 6 }, (_, index) => start + ((end - start) * index) / 5), [start, end])
 
@@ -97,7 +131,7 @@ export default function TimelineEditor() {
           <i className="timeline-playhead" style={{ left: `${((currentFrame - start) / Math.max(1, end - start)) * 100}%` }}/>
         </div>
       </div>
-      {layers.map((layer, index) => <LayerRow key={`${layer.ind ?? index}-${layer.nm ?? ''}`} layer={layer} index={index} selected={selectedLayerIndex === index} expanded={expanded.has(index)} onSelect={() => setSelectedLayerIndex(index)} onToggle={() => toggleLayer(index)} frame={currentFrame} start={start} end={end} setLayerTransform={setLayerTransform} seekFrame={seekFrame}/>)}
+      {layers.map((layer, index) => <LayerRow key={`${layer.ind ?? index}-${layer.nm ?? ''}`} layer={layer} index={index} selected={selectedLayerIndices.includes(index)} hovered={hoveredLayerIndex === index} expanded={expanded.has(index)} onHover={() => setHoveredLayerIndex(index)} onLeave={() => setHoveredLayerIndex((current) => current === index ? null : current)} onSelect={(event) => selectLayer(index, event.metaKey || event.ctrlKey || event.shiftKey)} onToggle={() => toggleLayer(index)} frame={currentFrame} start={start} end={end} width={width} height={height} setLayerTransform={setLayerTransform} seekFrame={seekFrame}/>)}
       {!layers.length && <div className="timeline-empty">This composition has no editable layers.</div>}
     </div>
   </section>

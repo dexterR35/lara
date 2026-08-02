@@ -73,5 +73,14 @@ test('creates native Lottie transform keyframes and interpolates their values', 
     { t: 30, s: [70, 80, 0] },
   ])
   assert.deepEqual(propertyValueAtFrame(first.layers[0].ks.p, 15, [0, 0, 0]), [40, 50, 0])
+  assert.deepEqual(first.layers[0].ks.p.k[0].i, { x: 1, y: 1 })
+  assert.deepEqual(first.layers[0].ks.p.k[0].o, { x: 0, y: 0 })
   assert.deepEqual(source.layers[0].ks.p.k, [10, 20, 0])
+})
+
+test('inserts a renderer-safe keyframe before an existing animated transform', () => {
+  const source = { ...minimal, layers: [{ ind: 1, ks: { p: { a: 1, k: [{ i: { x: .8, y: .8 }, o: { x: .2, y: .2 }, t: 20, s: [10, 20, 0] }, { t: 40, s: [30, 40, 0] }] } } }] }
+  const edited = setLayerTransformValue(source, 0, 'p', 0, [50, 60, 0], true)
+  assert.deepEqual(edited.layers[0].ks.p.k[0].i, { x: .8, y: .8 })
+  assert.deepEqual(edited.layers[0].ks.p.k[0].o, { x: .2, y: .2 })
 })

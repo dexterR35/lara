@@ -152,14 +152,16 @@ export function propertyValueAtFrame(property, frame, fallback = 0) {
   return start + (end - start) * progress
 }
 
-function syncKeyframeEnds(keyframes) {
-  return keyframes.map((keyframe, index) => {
-    const result = { ...keyframe, s: cloneValue(keyframe.s) }
-    const next = keyframes[index + 1]
-    if (next && result.h !== 1) result.e = cloneValue(next.s)
-    else delete result.e
-    return result
-  })
+function newKeyframe(frame, value, template) {
+  const keyframe = {
+    i: structuredClone(template?.i ?? { x: 1, y: 1 }),
+    o: structuredClone(template?.o ?? { x: 0, y: 0 }),
+    t: frame,
+    s: cloneValue(value),
+  }
+  if (template?.to) keyframe.to = Array.isArray(value) ? value.map(() => 0) : 0
+  if (template?.ti) keyframe.ti = Array.isArray(value) ? value.map(() => 0) : 0
+  return keyframe
 }
 
 export function setLayerTransformValue(data, layerIndex, track, frame, value, createKeyframe = false) {
@@ -190,14 +192,17 @@ export function setLayerTransformValue(data, layerIndex, track, frame, value, cr
   if (!keyframes.length) {
     const initialFrame = Number(result.ip) || 0
     const initialValue = propertyValueAtFrame(property, initialFrame, fallback)
-    if (initialFrame !== targetFrame) keyframes.push({ t: initialFrame, s: initialValue })
+    if (initialFrame !== targetFrame) keyframes.push(newKeyframe(initialFrame, initialValue))
   }
   const existing = keyframes.find((keyframe) => Number(keyframe.t) === targetFrame)
   if (existing) existing.s = normalized
-  else keyframes.push({ t: targetFrame, s: normalized })
+  else {
+    const template = keyframes.find((keyframe) => Number(keyframe.t) > targetFrame) || keyframes.at(-1)
+    keyframes.push(newKeyframe(targetFrame, normalized, template))
+  }
   keyframes.sort((a, b) => Number(a.t) - Number(b.t))
   property.a = 1
-  property.k = syncKeyframeEnds(keyframes)
+  property.k = keyframes
   return result
 }
 

@@ -20,8 +20,9 @@ export function WorkspaceProvider({ children }) {
   const [source, setSource] = useState(saved.source || null)
   const [sourceName, setSourceName] = useState(saved.sourceName || '')
   const [replacements, setReplacements] = useState(saved.replacements || {})
-  const [selectedId, setSelectedId] = useState(saved.selectedId || null)
-  const [selectedLayerIndex, setSelectedLayerIndex] = useState(null)
+  const [selectedLayerIndex, setSelectedLayerIndex] = useState(saved.source?.layers?.length ? 0 : null)
+  const [selectedLayerIndices, setSelectedLayerIndices] = useState(saved.source?.layers?.length ? [0] : [])
+  const [hoveredLayerIndex, setHoveredLayerIndex] = useState(null)
   const [currentFrame, setCurrentFrame] = useState(Number(saved.source?.ip) || 0)
   const [timelineOpen, setTimelineOpen] = useState(false)
   const [notice, setNotice] = useState(null)
@@ -35,14 +36,14 @@ export function WorkspaceProvider({ children }) {
 
   useEffect(() => {
     try {
-      if (source) sessionStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ source, sourceName, replacements, selectedId }))
+      if (source) sessionStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ source, sourceName, replacements }))
       else sessionStorage.removeItem(WORKSPACE_STORAGE_KEY)
       setStorageState('saved')
     } catch {
       setStorageState('memory-only')
       notify('Browser session storage is full. Export before refreshing.', 'error')
     }
-  }, [source, sourceName, replacements, selectedId, notify])
+  }, [source, sourceName, replacements, notify])
 
   const loadJsonFile = useCallback(async (file) => {
     if (!file) return
@@ -50,8 +51,8 @@ export function WorkspaceProvider({ children }) {
     setSource(data)
     setSourceName(file.name)
     setReplacements({})
-    setSelectedId(imageAssets(data)[0]?.id || null)
     setSelectedLayerIndex(data.layers.length ? 0 : null)
+    setSelectedLayerIndices(data.layers.length ? [0] : [])
     setCurrentFrame(Number(data.ip) || 0)
     setTimelineOpen(false)
     notify(`${file.name} is ready`, 'success')
@@ -83,8 +84,9 @@ export function WorkspaceProvider({ children }) {
     setSource(null)
     setSourceName('')
     setReplacements({})
-    setSelectedId(null)
     setSelectedLayerIndex(null)
+    setSelectedLayerIndices([])
+    setHoveredLayerIndex(null)
     setCurrentFrame(0)
     setTimelineOpen(false)
     sessionStorage.removeItem(WORKSPACE_STORAGE_KEY)
@@ -97,12 +99,26 @@ export function WorkspaceProvider({ children }) {
     window.dispatchEvent(new CustomEvent('lara:seek', { detail: next }))
   }, [source])
 
+  const selectLayer = useCallback((index, additive = false) => {
+    const next = additive
+      ? selectedLayerIndices.includes(index) ? selectedLayerIndices.filter((item) => item !== index) : [...selectedLayerIndices, index]
+      : [index]
+    setSelectedLayerIndices(next)
+    setSelectedLayerIndex(next.at(-1) ?? null)
+  }, [selectedLayerIndices])
+
+  const selectAllLayers = useCallback((indices) => {
+    const next = [...new Set(indices)].filter((index) => source?.layers?.[index])
+    setSelectedLayerIndices(next)
+    setSelectedLayerIndex(next.at(-1) ?? null)
+  }, [source])
+
   const setLayerTransform = useCallback((layerIndex, track, frame, value, createKeyframe = false) => {
     setSource((current) => current ? setLayerTransformValue(current, layerIndex, track, frame, value, createKeyframe) : current)
   }, [])
 
   const merged = useMemo(() => source ? mergedLottie(source, replacements) : null, [source, replacements])
-  const value = useMemo(() => ({ source, sourceName, replacements, selectedId, setSelectedId, selectedLayerIndex, setSelectedLayerIndex, currentFrame, setCurrentFrame, seekFrame, timelineOpen, setTimelineOpen, notice, notify, storageState, loadJsonFile, replaceAsset, applyBatch, removeReplacement, setLayerTransform, reset, merged }), [source, sourceName, replacements, selectedId, selectedLayerIndex, currentFrame, seekFrame, timelineOpen, notice, notify, storageState, loadJsonFile, replaceAsset, applyBatch, removeReplacement, setLayerTransform, reset, merged])
+  const value = useMemo(() => ({ source, sourceName, replacements, selectedLayerIndex, selectedLayerIndices, selectLayer, selectAllLayers, hoveredLayerIndex, setHoveredLayerIndex, currentFrame, setCurrentFrame, seekFrame, timelineOpen, setTimelineOpen, notice, notify, storageState, loadJsonFile, replaceAsset, applyBatch, removeReplacement, setLayerTransform, reset, merged }), [source, sourceName, replacements, selectedLayerIndex, selectedLayerIndices, selectLayer, selectAllLayers, hoveredLayerIndex, currentFrame, seekFrame, timelineOpen, notice, notify, storageState, loadJsonFile, replaceAsset, applyBatch, removeReplacement, setLayerTransform, reset, merged])
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

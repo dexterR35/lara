@@ -10,18 +10,19 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@panzoom/panzoom": "^4.6.2",
     "jszip": "^3.10.1",
+    "konva": "^10.3.0",
     "lottie-web": "^5.13.0",
     "lucide-react": "^0.468.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-dropzone": "^19.2.0"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-dropzone": "^19.2.0",
+    "react-konva": "^19.2.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.0.5",
     "tailwindcss": "^4.3.3",
-    "vite": "^6.0.5"
+    "vite": "^8.2.0"
   }
 }
