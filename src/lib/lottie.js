@@ -1,7 +1,7 @@
 import JSZip from 'jszip'
 
 const IMAGE_EXTENSION = /\.(png|jpe?g|webp|gif|svg)$/i
-export const MAX_LOTTIE_FILE_SIZE = 10 * 1024 * 1024
+export const MAX_LOTTIE_FILE_SIZE = 50 * 1024 * 1024
 
 export function validateLottie(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('This JSON is not a Lottie animation.')
@@ -21,7 +21,7 @@ export function parseLottieJson(text) {
 
 export async function parseLottieFile(file) {
   if (!file) throw new Error('Choose a Lottie JSON or .lottie file.')
-  if (file.size > MAX_LOTTIE_FILE_SIZE) throw new Error('The selected file is larger than 10 MB.')
+  if (file.size > MAX_LOTTIE_FILE_SIZE) throw new Error('The selected file is larger than 50 MB.')
 
   if (!String(file.name || '').toLowerCase().endsWith('.lottie')) {
     return parseLottieJson(await file.text())

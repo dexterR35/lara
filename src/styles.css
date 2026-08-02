@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   /* Brand */
@@ -45,153 +43,694 @@
 }
 
 @layer base {
-  * { box-sizing: border-box; }
-  html { color-scheme: dark; }
-  html, body, #root { @apply h-full overflow-hidden; }
-  body { @apply m-0 min-w-[320px] antialiased; background-color: var(--color-ink); color: var(--color-neutral-100); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  button, input { font: inherit; }
-  button, a { -webkit-tap-highlight-color: transparent; }
-  button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, transparent); outline-offset: 2px; }
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-dvh overflow-hidden;
+  }
+
+  body {
+    @apply m-0 min-w-[320px] antialiased;
+    background-color: var(--color-ink);
+    color: var(--color-neutral-100);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, transparent);
+    outline-offset: 2px;
+  }
 }
 
 @layer components {
-  .app-shell { @apply flex h-dvh flex-col overflow-hidden; background-color: var(--color-ink); background-image: radial-gradient(circle at 50% -20%, color-mix(in srgb, var(--color-primary) 9%, transparent), transparent 34%); }
-  .topbar { @apply z-30 flex h-[68px] shrink-0 items-center justify-between border-b px-5 backdrop-blur-xl md:px-8; border-color: color-mix(in srgb, var(--color-line) 80%, transparent); background-color: color-mix(in srgb, var(--color-ink) 90%, transparent); }
-  .brand { @apply flex items-center gap-3 no-underline; color: var(--color-white); }
-  .brand img { @apply h-8 w-8 rounded-[9px]; }
-  .brand > span:nth-child(2) { @apply text-lg font-bold tracking-[-.03em]; }
-  .brand-tag { @apply hidden border-l pl-3 text-xs font-medium sm:block; border-color: var(--color-line); color: var(--color-muted); }
-  .topbar-actions { @apply flex items-center gap-2; }
-  .session-badge { @apply mr-2 hidden items-center gap-2 text-xs md:flex; color: var(--color-muted); }
-  .session-badge span, .privacy-note span, .status-live span { @apply h-1.5 w-1.5 rounded-full; background-color: var(--color-success); }
-  .session-memory-only { color: var(--color-warning); }
-  .session-memory-only span { background-color: var(--color-warning); }
-  .icon-link { @apply grid h-9 w-9 place-items-center rounded-lg transition; color: var(--color-muted); }
-  .icon-link:hover { background-color: color-mix(in srgb, var(--color-white) 5%, transparent); color: var(--color-white); }
-  .app-main { @apply mx-auto flex min-h-0 w-full max-w-[1560px] flex-1 flex-col overflow-hidden px-4 py-4 md:px-7 md:py-5; }
-  .button { @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3.5 text-xs font-semibold transition disabled:pointer-events-none disabled:opacity-40; border-color: var(--color-line); background-color: var(--color-neutral-900); color: var(--color-neutral-200); }
-  .button:hover { border-color: var(--color-neutral-600); background-color: var(--color-neutral-800); }
-  .button-primary { border-color: var(--color-primary); background-color: var(--color-primary); color: var(--color-white); }
-  .button-primary:hover { border-color: var(--color-primary-soft); background-color: var(--color-primary-hover); }
-  .button-ghost { border-color: transparent; background-color: transparent; color: var(--color-muted); }
-  .button-ghost:hover { border-color: var(--color-line); }
-  .button-icon { @apply h-9 w-9 p-0; }
-  .panel { @apply rounded-xl border; border-color: var(--color-line); background-color: var(--color-panel); }
-  .eyebrow { @apply m-0 text-[10px] font-bold uppercase tracking-[.16em]; color: var(--color-muted); }
+  .app-shell {
+    @apply flex h-full min-h-0 flex-col overflow-hidden;
+    background-color: var(--color-ink);
 
-  .welcome-dropzone { @apply mx-auto flex h-full min-h-0 w-full max-w-[840px] flex-1 flex-col items-center justify-center rounded-2xl border border-dashed px-6 text-center transition; border-color: var(--color-neutral-700); background-color: color-mix(in srgb, var(--color-panel) 80%, transparent); }
-  .welcome-dropzone.is-dragging { @apply scale-[1.01]; border-color: var(--color-primary); background-color: color-mix(in srgb, var(--color-primary-hover) 5%, transparent); }
-  .welcome-icon { @apply mb-7 grid h-14 w-14 place-items-center rounded-2xl border; border-color: color-mix(in srgb, var(--color-primary-soft) 30%, transparent); background-color: color-mix(in srgb, var(--color-primary-hover) 10%, transparent); color: var(--color-primary-soft); }
-  .welcome-dropzone h1 { @apply mb-4 mt-3 text-4xl font-bold leading-[1.08] tracking-[-.045em] md:text-6xl; color: var(--color-white); }
-  .welcome-copy { @apply m-0 max-w-xl text-sm leading-6 md:text-base; color: var(--color-muted); }
-  .welcome-actions { @apply mt-8 flex flex-col items-center gap-4 sm:flex-row; }
-  .welcome-actions .button { @apply h-11 px-5 text-sm; }
-  .welcome-actions > span { @apply flex items-center gap-2 text-xs; color: var(--color-muted); }
-  .privacy-note { @apply mt-12 flex items-center gap-2 text-xs; color: var(--color-neutral-500); }
+  }
 
-  .workspace { @apply relative flex min-h-0 flex-1 flex-col gap-3; }
-  .workspace-summary { @apply flex shrink-0 flex-wrap items-center gap-4 rounded-xl border px-4 py-2.5; border-color: var(--color-line); background-color: var(--color-panel); }
-  .file-identity { @apply flex min-w-0 flex-1 items-center gap-3; }
-  .file-icon { @apply grid h-10 w-10 shrink-0 place-items-center rounded-lg; background-color: color-mix(in srgb, var(--color-primary-hover) 10%, transparent); color: var(--color-primary-soft); }
-  .file-identity p { @apply m-0 truncate text-sm font-semibold; color: var(--color-white); }
-  .file-identity span { @apply mt-0.5 block text-xs; color: var(--color-muted); }
-  .summary-stats { @apply hidden items-center divide-x text-xs sm:flex; color: var(--color-muted); }
-  .summary-stats > :not([hidden]) ~ :not([hidden]) { border-color: var(--color-line); }
-  .summary-stats span { @apply px-4; }
-  .summary-stats strong { @apply mr-1; color: var(--color-neutral-200); }
-  .editor-grid { @apply grid min-h-0 flex-1 gap-3 lg:grid-cols-[390px_minmax(0,1fr)]; }
+  .topbar {
+    @apply z-30 flex h-14 shrink-0 items-center justify-between border-b px-5 backdrop-blur-xl md:px-8;
+    border-color: color-mix(in srgb, var(--color-line) 80%, transparent);
+    background-color: color-mix(in srgb, var(--color-ink) 90%, transparent);
+  }
 
-  .asset-panel, .preview-panel { @apply flex min-h-0 flex-col overflow-hidden; }
-  .panel-heading, .preview-heading { @apply flex items-center justify-between border-b px-4 py-4; border-color: var(--color-line); }
-  .panel-heading h2, .preview-heading h2, .export-copy h2 { @apply m-0 mt-1 text-base font-semibold tracking-[-.02em]; color: var(--color-white); }
-  .count-pill { @apply rounded-full px-2.5 py-1 text-[11px] font-semibold; background-color: var(--color-neutral-800); color: var(--color-neutral-400); }
-  .search-field { @apply mx-3 my-3 flex h-9 items-center gap-2 rounded-lg border px-3; border-color: var(--color-line); background-color: color-mix(in srgb, var(--color-ink) 60%, transparent); color: var(--color-muted); }
-  .search-field:focus-within { border-color: var(--color-neutral-600); }
-  .search-field input { @apply min-w-0 flex-1 border-0 text-xs outline-none; background-color: transparent; color: var(--color-white); }
-  .search-field input::placeholder { color: var(--color-neutral-600); }
-  .asset-list { @apply min-h-0 flex-1 overscroll-contain overflow-y-auto border-y; border-color: var(--color-line); scrollbar-color: var(--color-neutral-700) transparent; }
-  .asset-row { @apply grid w-full grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-2.5 text-left transition; border-color: color-mix(in srgb, var(--color-line) 70%, transparent); background-color: transparent; }
-  .asset-row:hover { background-color: color-mix(in srgb, var(--color-white) 2.5%, transparent); }
-  .asset-row.is-selected { border-left: 2px solid var(--color-primary); background-color: color-mix(in srgb, var(--color-primary-hover) 7%, transparent); }
-  .thumbnail { @apply grid h-12 w-12 place-items-center overflow-hidden rounded-lg border; border-color: var(--color-line); color: var(--color-muted); background: repeating-conic-gradient(var(--color-checker-light) 0 25%, var(--color-checker-dark) 0 50%) 50%/12px 12px; }
-  .thumbnail img { @apply h-full w-full object-contain; }
-  .asset-copy { @apply min-w-0; }
-  .asset-copy strong { @apply block truncate text-xs font-semibold; color: var(--color-neutral-200); }
-  .asset-copy small { @apply mt-1 block truncate text-[11px]; color: var(--color-muted); }
-  .asset-meta { @apply text-right; }
-  .asset-meta small { @apply block text-[10px]; color: var(--color-neutral-500); }
-  .asset-meta em { @apply mt-1 flex items-center justify-end gap-1 text-[10px] not-italic; color: var(--color-success); }
-  .empty-list { @apply grid h-full min-h-48 place-items-center px-5 text-center text-xs; color: var(--color-muted); }
-  .asset-actions { @apply flex gap-2 px-3 pt-3; }
-  .asset-actions .button:first-child { @apply flex-1; }
-  .selected-info { @apply mb-3 mt-2 truncate px-3 text-[10px]; color: var(--color-neutral-600); }
-  .selected-info strong { color: var(--color-neutral-500); }
+  .brand {
+    @apply flex items-center gap-3 no-underline;
+    color: var(--color-white);
+  }
 
-  .status-live { @apply flex items-center gap-2 text-[11px]; color: var(--color-muted); }
-  .preview-canvas { @apply relative m-3 mb-0 min-h-0 flex-1 touch-none select-none overflow-hidden rounded-lg border; border-color: var(--color-line); background-color: var(--color-canvas); background-image: radial-gradient(circle, var(--color-canvas-dot) 1px, transparent 1px); background-size: 22px 22px; }
-  .preview-artboard { @apply absolute left-1/2 top-1/2 overflow-hidden will-change-transform; background-color: transparent; box-shadow: var(--shadow-artboard); }
-  .preview-stage { @apply h-full w-full pointer-events-none; }
-  .preview-stage svg { @apply h-full w-full; }
-  .preview-error { @apply absolute left-1/2 top-1/2 z-10 flex max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-xl border p-5 text-center backdrop-blur-md; border-color: color-mix(in srgb, var(--color-primary-hover) 30%, transparent); background-color: color-mix(in srgb, var(--color-black) 80%, transparent); color: var(--color-primary-subtle); }
-  .preview-error strong { @apply mt-2 text-sm; color: var(--color-white); }
-  .preview-error span { @apply mt-1 text-xs leading-5; color: var(--color-muted); }
-  .canvas-tools { @apply absolute right-3 top-3 flex items-center gap-1 rounded-[10px] border p-1 backdrop-blur-md; border-color: var(--color-line); background-color: color-mix(in srgb, var(--color-black) 75%, transparent); }
-  .canvas-tools .button { border-color: transparent; background-color: transparent; }
-  .canvas-tools .button:hover { border-color: var(--color-line); background-color: var(--color-neutral-800); }
-  .zoom-value { @apply h-9 min-w-[54px] rounded-lg border-0 px-2 text-[11px] font-semibold; background-color: transparent; color: var(--color-neutral-300); }
-  .zoom-value:hover { background-color: var(--color-neutral-800); }
-  .tool-divider { @apply mx-1 h-5 w-px; background-color: var(--color-line); }
-  .canvas-hint { @apply pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] opacity-70 backdrop-blur; border-color: var(--color-line); background-color: color-mix(in srgb, var(--color-black) 65%, transparent); color: var(--color-neutral-400); }
-  .preview-canvas:fullscreen { @apply m-0 rounded-none border-0; }
-  .playback { @apply flex items-center gap-2 px-3 py-3; }
-  .playback input[type='range'] { @apply mx-2 h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded; background-color: var(--color-neutral-700); accent-color: var(--color-primary); }
-  .frame-count { @apply min-w-[72px] text-right font-mono text-[10px]; color: var(--color-muted); }
+  .brand img {
+    @apply h-8 w-8 rounded-[9px];
+    background-color: var(--color-primary);
+  }
 
-  .export-card { @apply flex shrink-0 flex-col items-start justify-between gap-3 p-3 md:flex-row md:items-center; }
-  .export-copy p:last-child { @apply mb-0 mt-1 text-xs; color: var(--color-muted); }
-  .export-actions { @apply flex w-full flex-wrap gap-2 md:w-auto; }
-  .drop-overlay { @apply pointer-events-none fixed inset-4 z-50 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed backdrop-blur-md; border-color: var(--color-primary); background-color: color-mix(in srgb, var(--color-ink) 90%, transparent); color: var(--color-primary); }
-  .drop-overlay strong { @apply mt-3 text-lg; color: var(--color-white); }
-  .drop-overlay span { @apply mt-1 text-xs; color: var(--color-muted); }
-  .toast { @apply fixed bottom-5 right-5 z-[60] max-w-sm rounded-lg border px-4 py-3 text-xs font-medium; border-color: var(--color-line); background-color: var(--color-neutral-900); color: var(--color-white); }
-  .toast-success { border-color: color-mix(in srgb, var(--color-success-border) 30%, transparent); }
-  .toast-error { border-color: color-mix(in srgb, var(--color-primary-hover) 40%, transparent); color: var(--color-primary-faint); }
-  .is-loading svg { @apply animate-spin; }
+  .brand>span:nth-child(2) {
+    @apply text-lg font-bold tracking-[-.03em];
+  }
 
-  .confirm-backdrop { @apply fixed inset-0 z-[70] grid place-items-center p-4 backdrop-blur-sm; background-color: color-mix(in srgb, var(--color-black) 72%, transparent); }
-  .confirm-dialog { @apply w-full max-w-md p-5; }
-  .confirm-icon { @apply mb-4 grid h-11 w-11 place-items-center rounded-xl border; border-color: color-mix(in srgb, var(--color-warning) 35%, transparent); background-color: color-mix(in srgb, var(--color-warning) 10%, transparent); color: var(--color-warning); }
-  .confirm-danger .confirm-icon { border-color: color-mix(in srgb, var(--color-primary-soft) 35%, transparent); background-color: color-mix(in srgb, var(--color-primary-hover) 10%, transparent); color: var(--color-primary-soft); }
-  .confirm-dialog h2 { @apply m-0 text-lg font-semibold tracking-[-.02em]; color: var(--color-white); }
-  .confirm-dialog p { @apply mb-0 mt-2 text-sm leading-6; color: var(--color-muted); }
-  .confirm-actions { @apply mt-5 flex justify-end gap-2; }
+  .brand-tag {
+    @apply hidden border-l pl-3 text-xs font-medium sm:block;
+    border-color: var(--color-line);
+    color: var(--color-muted);
+  }
 
-  .fatal-error { @apply mx-auto flex h-dvh max-w-2xl flex-col items-start justify-center px-6; }
-  .fatal-error img { @apply mb-8 h-12 w-12 rounded-xl; }
-  .fatal-error h1 { @apply mb-3 mt-2 text-3xl font-bold tracking-[-.04em] md:text-5xl; color: var(--color-white); }
-  .fatal-error > p:last-of-type { @apply max-w-xl text-sm leading-6; color: var(--color-muted); }
-  .fatal-error code { @apply my-5 max-w-full overflow-hidden text-ellipsis rounded-lg border px-3 py-2 text-xs; border-color: color-mix(in srgb, var(--color-primary-hover) 20%, transparent); background-color: color-mix(in srgb, var(--color-primary-hover) 5%, transparent); color: var(--color-primary-subtle); }
-  .fatal-error > div { @apply flex gap-2; }
+  .topbar-actions {
+    @apply flex items-center gap-2;
+  }
 
-  .help-page { @apply mx-auto h-full min-h-0 w-full max-w-5xl flex-1 overflow-hidden py-8; }
-  .back-link { @apply mb-12 inline-flex items-center gap-2 text-xs no-underline; color: var(--color-muted); }
-  .back-link:hover { color: var(--color-white); }
-  .help-page > h1 { @apply mb-10 mt-3 max-w-3xl text-4xl font-bold tracking-[-.045em] md:text-6xl; color: var(--color-white); }
-  .help-grid { @apply grid gap-4 md:grid-cols-3; }
-  .help-grid article { @apply p-6; }
-  .help-grid article > svg { @apply mb-8; color: var(--color-primary); }
-  .help-grid h2 { @apply text-base; color: var(--color-white); }
-  .help-grid p { @apply text-sm leading-6; color: var(--color-muted); }
+  .session-badge {
+    @apply mr-2 hidden items-center gap-2 text-xs md:flex;
+    color: var(--color-muted);
+  }
+
+  .session-badge span,
+  .privacy-note span,
+  .status-live span {
+    @apply h-1.5 w-1.5 rounded-full;
+    background-color: var(--color-success);
+  }
+
+  .session-memory-only {
+    color: var(--color-warning);
+  }
+
+  .session-memory-only span {
+    background-color: var(--color-warning);
+  }
+
+  .icon-link {
+    @apply grid h-9 w-9 place-items-center rounded-lg transition;
+    color: var(--color-muted);
+  }
+
+  .icon-link:hover {
+    background-color: color-mix(in srgb, var(--color-white) 5%, transparent);
+    color: var(--color-white);
+  }
+
+  .app-main {
+    @apply mx-auto flex min-h-0 w-full max-w-[1560px] flex-1 flex-col overflow-hidden px-4 py-3 md:px-7;
+  }
+
+  .button {
+    @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3.5 text-xs font-semibold transition disabled:pointer-events-none disabled:opacity-40;
+    border-color: var(--color-line);
+    background-color: var(--color-neutral-900);
+    color: var(--color-neutral-200);
+  }
+
+  .button:hover {
+    border-color: var(--color-neutral-600);
+    background-color: var(--color-neutral-800);
+  }
+
+  .button-primary {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary);
+    color: var(--color-white);
+  }
+
+  .button-primary:hover {
+    border-color: var(--color-primary-soft);
+    background-color: var(--color-primary-hover);
+  }
+
+  .button-ghost {
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--color-muted);
+  }
+
+  .button-ghost:hover {
+    border-color: var(--color-line);
+  }
+
+  .button-icon {
+    @apply h-9 w-9 p-0;
+  }
+
+  .panel {
+    @apply rounded-xl border;
+    border-color: var(--color-line);
+    background-color: var(--color-panel);
+  }
+
+  .eyebrow {
+    @apply m-0 text-[10px] font-bold uppercase tracking-[.16em];
+    color: var(--color-muted);
+  }
+
+  .welcome-dropzone {
+    @apply mx-auto my-auto flex w-full max-w-[840px] flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-14 text-center transition;
+    border-color: var(--color-neutral-700);
+    background-color: color-mix(in srgb, var(--color-panel) 80%, transparent);
+  }
+
+  .welcome-dropzone.is-dragging {
+    @apply scale-[1.01];
+    border-color: var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary-hover) 5%, transparent);
+  }
+
+  .welcome-icon {
+    @apply mb-7 flex h-14 w-14 items-center justify-center rounded-2xl;
+    background-color: var(--color-primary);
+    color: var(--color-white);
+  }
+
+  .welcome-icon svg {
+    @apply block;
+  }
+
+  .welcome-dropzone h1 {
+    @apply mb-4 mt-3 text-4xl font-bold leading-[1.08] tracking-[-.045em] md:text-6xl;
+    color: var(--color-white);
+  }
+
+  .welcome-copy {
+    @apply m-0 max-w-xl text-sm leading-6 md:text-base;
+    color: var(--color-muted);
+  }
+
+  .welcome-actions {
+    @apply mt-8 flex flex-col items-center gap-4 sm:flex-row;
+  }
+
+  .welcome-actions .button {
+    @apply h-11 px-5 text-sm;
+  }
+
+  .welcome-actions>span {
+    @apply flex items-center gap-2 text-xs;
+    color: var(--color-muted);
+  }
+
+  .privacy-note {
+    @apply mt-12 flex items-center gap-2 text-xs;
+    color: var(--color-neutral-500);
+  }
+
+  .workspace {
+    @apply relative flex min-h-0 flex-1 flex-col gap-2;
+  }
+
+  .workspace-summary {
+    @apply flex min-h-12 shrink-0 flex-wrap items-center gap-3 rounded-xl border px-3 py-1.5;
+    border-color: var(--color-line);
+    background-color: var(--color-panel);
+  }
+
+  .file-identity {
+    @apply flex min-w-0 flex-1 items-center gap-2.5;
+  }
+
+  .file-icon {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg;
+    background-color: var(--color-primary);
+    color: var(--color-white);
+  }
+
+  .file-icon svg {
+    @apply block;
+  }
+
+  .file-identity p {
+    @apply m-0 truncate text-sm font-semibold;
+    color: var(--color-white);
+  }
+
+  .file-identity>div>span {
+    @apply mt-0.5 block text-xs;
+    color: var(--color-muted);
+  }
+
+  .summary-stats {
+    @apply hidden items-center divide-x text-xs sm:flex;
+    color: var(--color-muted);
+  }
+
+  .summary-stats> :not([hidden])~ :not([hidden]) {
+    border-color: var(--color-line);
+  }
+
+  .summary-stats span {
+    @apply px-4;
+  }
+
+  .summary-stats strong {
+    @apply mr-1;
+    color: var(--color-neutral-200);
+  }
+
+  .editor-grid {
+    @apply grid min-h-0 flex-1 gap-2 lg:grid-cols-[390px_minmax(0,1fr)];
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .asset-panel,
+  .preview-panel {
+    @apply flex min-h-0 flex-col overflow-hidden;
+  }
+
+  .panel-heading,
+  .preview-heading {
+    @apply flex shrink-0 items-center justify-between border-b px-4 py-2.5;
+    border-color: var(--color-line);
+  }
+
+  .panel-heading h2,
+  .preview-heading h2,
+  .export-copy h2 {
+    @apply m-0 mt-1 text-base font-semibold tracking-[-.02em];
+    color: var(--color-white);
+  }
+
+  .count-pill {
+    @apply rounded-full px-2.5 py-1 text-[11px] font-semibold;
+  }
+
+  .count-pill.is-edited {
+    background-color: color-mix(in srgb, var(--color-success) 18%, transparent);
+    color: var(--color-success);
+  }
+
+  .count-pill.is-clean {
+    background-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+    color: var(--color-primary-soft);
+  }
+
+  .search-field {
+    @apply mx-3 my-2 flex h-9 items-center gap-2 rounded-lg border px-3;
+    border-color: var(--color-line);
+    background-color: color-mix(in srgb, var(--color-ink) 60%, transparent);
+    color: var(--color-muted);
+  }
+
+  .search-field:focus-within {
+    border-color: var(--color-neutral-600);
+  }
+
+  .search-field input {
+    @apply min-w-0 flex-1 border-0 text-xs outline-none;
+    background-color: transparent;
+    color: var(--color-white);
+  }
+
+  .search-field input::placeholder {
+    color: var(--color-neutral-600);
+  }
+
+  .asset-list {
+    @apply min-h-0 flex-1 overscroll-contain overflow-y-auto border-y;
+    border-color: var(--color-line);
+    scrollbar-color: var(--color-neutral-700) transparent;
+  }
+
+  .asset-row {
+    @apply grid w-full grid-cols-[48px_minmax(0,_1fr)_auto] items-center gap-3 border-b px-3 py-2.5 text-left transition;
+    border-color: color-mix(in srgb, var(--color-line) 70%, transparent);
+    background-color: transparent;
+  }
+
+  .asset-row:hover {
+    background-color: color-mix(in srgb, var(--color-white) 2.5%, transparent);
+  }
+
+  .asset-row.is-selected {
+    border-left: 2px solid var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary-hover) 7%, transparent);
+  }
+
+  .thumbnail {
+    @apply grid h-12 w-12 place-items-center overflow-hidden rounded-lg border;
+    border-color: var(--color-line);
+    color: var(--color-muted);
+    background: repeating-conic-gradient(var(--color-checker-light) 0 25%, var(--color-checker-dark) 0 50%) 50%/12px 12px;
+  }
+
+  .thumbnail img {
+    @apply h-full w-full object-contain;
+  }
+
+  .asset-copy {
+    @apply min-w-0;
+  }
+
+  .asset-copy strong {
+    @apply block truncate text-xs font-semibold;
+    color: var(--color-neutral-200);
+  }
+
+  .asset-copy small {
+    @apply mt-1 block truncate text-[11px];
+    color: var(--color-muted);
+  }
+
+  .asset-meta {
+    @apply text-right;
+  }
+
+  .asset-meta small {
+    @apply block text-[10px];
+    color: var(--color-neutral-500);
+  }
+
+  .asset-meta em {
+    @apply mt-1 flex items-center justify-end gap-1 text-[10px] not-italic;
+    color: var(--color-success);
+  }
+
+  .empty-list {
+    @apply grid h-full min-h-48 place-items-center px-5 text-center text-xs;
+    color: var(--color-muted);
+  }
+
+  .asset-actions {
+    @apply flex gap-2 px-3 py-2;
+  }
+
+  .asset-actions .button:first-child {
+    @apply flex-1;
+  }
+
+  .selected-info {
+    @apply mb-2 truncate px-3 text-[10px];
+    color: var(--color-neutral-600);
+  }
+
+  .selected-info strong {
+    color: var(--color-neutral-500);
+  }
+
+  .status-live {
+    @apply flex items-center gap-2 text-[11px];
+    color: var(--color-muted);
+  }
+
+  .preview-canvas {
+    @apply relative m-3 mb-0 min-h-0 flex-1 touch-none select-none overflow-hidden rounded-lg border;
+    border-color: var(--color-line);
+    background-color: var(--color-canvas);
+    background-image: radial-gradient(circle, var(--color-canvas-dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  .preview-artboard {
+    @apply absolute left-1/2 top-1/2 overflow-hidden will-change-transform;
+    background-color: transparent;
+  }
+
+  .preview-stage {
+    @apply h-full w-full pointer-events-none;
+  }
+
+  .preview-stage svg {
+    @apply h-full w-full;
+  }
+
+  .preview-error {
+    @apply absolute left-1/2 top-1/2 z-10 flex max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-xl border p-5 text-center backdrop-blur-md;
+    border-color: color-mix(in srgb, var(--color-primary-hover) 30%, transparent);
+    background-color: color-mix(in srgb, var(--color-black) 80%, transparent);
+    color: var(--color-primary-subtle);
+  }
+
+  .preview-error strong {
+    @apply mt-2 text-sm;
+    color: var(--color-white);
+  }
+
+  .preview-error span {
+    @apply mt-1 text-xs leading-5;
+    color: var(--color-muted);
+  }
+
+  .canvas-tools {
+    @apply absolute right-3 top-3 flex items-center gap-1 rounded-[10px] border p-1 backdrop-blur-md;
+    border-color: var(--color-line);
+    background-color: color-mix(in srgb, var(--color-black) 75%, transparent);
+  }
+
+  .canvas-tools .button {
+    border-color: transparent;
+    background-color: transparent;
+  }
+
+  .canvas-tools .button:hover {
+    border-color: var(--color-line);
+    background-color: var(--color-neutral-800);
+  }
+
+  .zoom-value {
+    @apply h-9 min-w-[54px] rounded-lg border-0 px-2 text-[11px] font-semibold;
+    background-color: transparent;
+    color: var(--color-neutral-300);
+  }
+
+  .zoom-value:hover {
+    background-color: var(--color-neutral-800);
+  }
+
+  .tool-divider {
+    @apply mx-1 h-5 w-px;
+    background-color: var(--color-line);
+  }
+
+  .canvas-hint {
+    @apply pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] opacity-70 backdrop-blur;
+    border-color: var(--color-line);
+    background-color: color-mix(in srgb, var(--color-black) 65%, transparent);
+    color: var(--color-neutral-400);
+  }
+
+  .preview-canvas:fullscreen {
+    @apply m-0 rounded-none border-0;
+  }
+
+  .playback {
+    @apply flex shrink-0 items-center gap-2 px-3 py-2;
+  }
+
+  .playback input[type='range'] {
+    @apply mx-2 h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded;
+    background-color: var(--color-neutral-700);
+    accent-color: var(--color-primary);
+  }
+
+  .frame-count {
+    @apply min-w-[72px] text-right font-mono text-[10px];
+    color: var(--color-muted);
+  }
+
+  .export-card {
+    @apply flex shrink-0 flex-col items-start justify-between gap-2 px-3 py-2.5 md:flex-row md:items-center;
+  }
+
+  .export-copy p:last-child {
+    @apply mb-0 mt-1 text-xs;
+    color: var(--color-muted);
+  }
+
+  .export-actions {
+    @apply flex w-full flex-wrap gap-2 md:w-auto;
+  }
+
+  .drop-overlay {
+    @apply pointer-events-none fixed inset-4 z-50 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed backdrop-blur-md;
+    border-color: var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-ink) 90%, transparent);
+    color: var(--color-primary);
+  }
+
+  .drop-overlay strong {
+    @apply mt-3 text-lg;
+    color: var(--color-white);
+  }
+
+  .drop-overlay span {
+    @apply mt-1 text-xs;
+    color: var(--color-muted);
+  }
+
+  .toast {
+    @apply fixed bottom-5 right-5 z-[60] max-w-sm rounded-lg border px-4 py-3 text-xs font-medium;
+    border-color: var(--color-line);
+    background-color: var(--color-neutral-900);
+    color: var(--color-white);
+  }
+
+  .toast-success {
+    border-color: color-mix(in srgb, var(--color-success-border) 30%, transparent);
+  }
+
+  .toast-error {
+    border-color: color-mix(in srgb, var(--color-primary-hover) 40%, transparent);
+    color: var(--color-primary-faint);
+  }
+
+  .is-loading svg {
+    @apply animate-spin;
+  }
+
+  .confirm-backdrop {
+    @apply fixed inset-0 z-[70] grid place-items-center p-4 backdrop-blur-sm;
+    background-color: color-mix(in srgb, var(--color-black) 72%, transparent);
+  }
+
+  .confirm-dialog {
+    @apply w-full max-w-md p-5;
+  }
+
+  .confirm-icon {
+    @apply mb-4 grid h-11 w-11 place-items-center rounded-xl border;
+    border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+    background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
+    color: var(--color-warning);
+  }
+
+  .confirm-danger .confirm-icon {
+    border-color: color-mix(in srgb, var(--color-primary-soft) 35%, transparent);
+    background-color: color-mix(in srgb, var(--color-primary-hover) 10%, transparent);
+    color: var(--color-primary-soft);
+  }
+
+  .confirm-dialog h2 {
+    @apply m-0 text-lg font-semibold tracking-[-.02em];
+    color: var(--color-white);
+  }
+
+  .confirm-dialog p {
+    @apply mb-0 mt-2 text-sm leading-6;
+    color: var(--color-muted);
+  }
+
+  .confirm-actions {
+    @apply mt-5 flex justify-end gap-2;
+  }
+
+  .fatal-error {
+    @apply mx-auto flex h-full max-w-2xl flex-col items-start justify-center px-6;
+  }
+
+  .fatal-error img {
+    @apply mb-8 h-12 w-12 rounded-xl;
+  }
+
+  .fatal-error h1 {
+    @apply mb-3 mt-2 text-3xl font-bold tracking-[-.04em] md:text-5xl;
+    color: var(--color-white);
+  }
+
+  .fatal-error>p:last-of-type {
+    @apply max-w-xl text-sm leading-6;
+    color: var(--color-muted);
+  }
+
+  .fatal-error code {
+    @apply my-5 max-w-full overflow-hidden text-ellipsis rounded-lg border px-3 py-2 text-xs;
+    border-color: color-mix(in srgb, var(--color-primary-hover) 20%, transparent);
+    background-color: color-mix(in srgb, var(--color-primary-hover) 5%, transparent);
+    color: var(--color-primary-subtle);
+  }
+
+  .fatal-error>div {
+    @apply flex gap-2;
+  }
+
+  .help-page {
+    @apply mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-auto py-8;
+  }
+
+  .back-link {
+    @apply mb-12 inline-flex items-center gap-2 text-xs no-underline;
+    color: var(--color-muted);
+  }
+
+  .back-link:hover {
+    color: var(--color-white);
+  }
+
+  .help-page>h1 {
+    @apply mb-10 mt-3 max-w-3xl text-4xl font-bold tracking-[-.045em] md:text-6xl;
+    color: var(--color-white);
+  }
+
+  .help-grid {
+    @apply grid gap-4 md:grid-cols-3;
+  }
+
+  .help-grid article {
+    @apply p-6;
+  }
+
+  .help-grid article>svg {
+    @apply mb-8;
+    color: var(--color-primary);
+  }
+
+  .help-grid h2 {
+    @apply text-base;
+    color: var(--color-white);
+  }
+
+  .help-grid p {
+    @apply text-sm leading-6;
+    color: var(--color-muted);
+  }
 }
 
 @media (max-width: 1023px) {
-  .editor-grid { @apply grid-rows-[minmax(0,.9fr)_minmax(0,1.1fr)]; }
-  .asset-panel, .preview-panel { @apply min-h-0; }
+  .editor-grid {
+    grid-template-rows: minmax(0, .9fr) minmax(0, 1.1fr);
+  }
 }
+
 @media (max-width: 560px) {
-  .brand-tag, .session-badge, .summary-stats { display: none; }
-  .topbar { @apply px-3; }
-  .app-main { @apply px-3; }
-  .workspace-summary > .button { @apply w-full; }
-  .export-actions .button { @apply flex-1; }
+
+  .brand-tag,
+  .session-badge,
+  .summary-stats {
+    display: none;
+  }
+
+  .topbar {
+    @apply px-3;
+  }
+
+  .app-main {
+    @apply px-3;
+  }
+
+  .workspace-summary {
+    @apply h-auto py-2;
+  }
+
+  .workspace-summary>.button {
+    @apply w-full;
+  }
+
+  .export-actions .button {
+    @apply flex-1;
+  }
 }

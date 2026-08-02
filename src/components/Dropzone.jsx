@@ -1,32 +1,31 @@
 import { useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { FileJson, FolderOpen, UploadCloud } from 'lucide-react'
-import { useConfirm } from '../state/ConfirmContext'
+import { MAX_LOTTIE_FILE_SIZE } from '../lib/lottie'
 import Button from './Button'
 
 export default function Dropzone({ onFile }) {
-  const ask = useConfirm()
-
-  const load = useCallback(async ([file]) => {
+  const load = useCallback(([file]) => {
     if (!file) return
-    if (!(await ask({ title: 'Open Lottie file?', message: `Load ${file.name} into Lara.` }))) return
     onFile(file).catch((error) => window.dispatchEvent(new CustomEvent('lara:error', { detail: error.message })))
-  }, [ask, onFile])
+  }, [onFile])
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDropAccepted: load,
-    onDropRejected: () => window.dispatchEvent(new CustomEvent('lara:error', { detail: 'Choose a .json or .lottie file up to 10 MB.' })),
+    onDropRejected: () => window.dispatchEvent(new CustomEvent('lara:error', { detail: 'Choose a .json or .lottie file up to 50 MB.' })),
     accept: { 'application/json': ['.json', '.lottie'], 'text/json': ['.json'], 'application/zip': ['.lottie'], 'application/octet-stream': ['.lottie'] },
-    maxSize: 10 * 1024 * 1024,
+    maxSize: MAX_LOTTIE_FILE_SIZE,
     multiple: false,
     noClick: true,
   })
 
   return <section {...getRootProps({ className: `welcome-dropzone ${isDragActive ? 'is-dragging' : ''}` })}>
-    <div className="welcome-icon"><FileJson size={28}/></div><p className="eyebrow">Your private Lottie workspace</p>
+    {/* <div className="welcome-icon"><FileJson size={28}/></div><p className="eyebrow">Design v1</p> */}
     <h1>Lottie Asset Extractor</h1>
     <p className="welcome-copy">Open a Lottie JSON or dotLottie file</p>
-    <div className="welcome-actions"><Button variant="primary" icon={FolderOpen} onClick={open}>Choose Lottie file</Button><span><UploadCloud size={16}/> or drop it here</span></div>
+    <p className="welcome-copy flex items-center gap-2"> <UploadCloud size={16}/> or drop it here</p>
+  
+    <div className="welcome-actions"><Button variant="primary" icon={FolderOpen} onClick={open}>Choose Lottie file</Button></div>
     <input {...getInputProps()}/>
   </section>
 }

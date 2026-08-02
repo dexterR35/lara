@@ -59,7 +59,7 @@ test('lists Lottie font family and style references', () => {
   ])
 })
 
-test('rejects Lottie files larger than 10 MB', async () => {
-  const file = { name: 'large.json', size: 10 * 1024 * 1024 + 1, text: async () => '' }
-  await assert.rejects(parseLottieFile(file), /larger than 10 MB/)
+test('rejects Lottie files larger than 50 MB', async () => {
+  const file = { name: 'large.json', size: 50 * 1024 * 1024 + 1, text: async () => '' }
+  await assert.rejects(parseLottieFile(file), /larger than 50 MB/)
 })

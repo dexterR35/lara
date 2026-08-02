@@ -42,7 +42,7 @@ function Layout() {
 
   return <div className="app-shell">
     <header className="topbar">
-      <a className="brand" href="#/editor" aria-label="Lara home"><img src="/lara-icon.svg" alt=""/><span>Lara</span><span className="brand-tag">Lottie studio</span></a>
+      <a className="brand" href="#/editor" aria-label="Lara home"><img src="/lara-icon.svg" alt=""/><span className="brand-tag">Lottie studio</span></a>
       <div className="topbar-actions"><span className={`session-badge session-${storageState}`}><span/> {storageState === 'saved' ? 'Session saved' : 'Memory only'}</span><a className="icon-link" href="#/help" title="Help" aria-label="Open help"><HelpCircle size={18}/></a><Button variant="ghost" icon={RotateCcw} disabled={!source} onClick={resetWorkspace}>Reset</Button></div>
     </header>
     <main className="app-main"><Outlet view={View}/></main>

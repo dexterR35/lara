@@ -15,7 +15,7 @@ export default function Preview() {
   const stage = useRef(null)
   const animation = useRef(null)
   const panzoom = useRef(null)
-  const [playing, setPlaying] = useState(true)
+  const [playing, setPlaying] = useState(false)
   const [frame, setFrame] = useState(0)
   const [total, setTotal] = useState(0)
   const [zoom, setZoom] = useState(1)
@@ -102,7 +102,7 @@ export default function Preview() {
           container: stage.current,
           renderer: 'svg',
           loop: true,
-          autoplay: true,
+          autoplay: false,
           animationData: structuredClone(merged),
           rendererSettings: { preserveAspectRatio: 'xMidYMid meet', clearCanvas: true },
         })
@@ -122,7 +122,7 @@ export default function Preview() {
         instance.addEventListener('enterFrame', update)
         instance.addEventListener('DOMLoaded', update)
         instance.addEventListener('data_failed', failed)
-        setPlaying(true)
+        setPlaying(false)
         setPreviewReady(true)
       } catch (error) {
         if (disposed) return
