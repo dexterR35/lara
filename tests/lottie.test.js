@@ -84,3 +84,28 @@ test('inserts a renderer-safe keyframe before an existing animated transform', (
   assert.deepEqual(edited.layers[0].ks.p.k[0].i, { x: .8, y: .8 })
   assert.deepEqual(edited.layers[0].ks.p.k[0].o, { x: .2, y: .2 })
 })
+
+test('keeps separated position dimensions animated when dragging a layer', () => {
+  const source = { ...minimal, layers: [{ ind: 1, ks: { p: {
+    s: true,
+    x: { a: 1, k: [{ t: 0, s: [10] }, { t: 20, s: [30] }] },
+    y: { a: 1, k: [{ t: 0, s: [20] }, { t: 20, s: [60] }] },
+  } } }] }
+  const edited = setLayerTransformValue(source, 0, 'p', 10, [25, 50, 0], true)
+
+  assert.equal(edited.layers[0].ks.p.s, true)
+  assert.deepEqual(edited.layers[0].ks.p.x.k.map(({ t, s }) => [t, s]), [[0, [10]], [10, [25]], [20, [30]]])
+  assert.deepEqual(edited.layers[0].ks.p.y.k.map(({ t, s }) => [t, s]), [[0, [20]], [10, [50]], [20, [60]]])
+  assert.deepEqual(propertyValueAtFrame(edited.layers[0].ks.p, 10, [0, 0, 0]), [25, 50, 0])
+})
+
+test('updates a preceding keyframe endpoint when an existing point moves', () => {
+  const source = { ...minimal, layers: [{ ind: 1, ks: { p: { a: 1, k: [
+    { t: 0, s: [0, 0, 0], e: [10, 10, 0] },
+    { t: 10, s: [10, 10, 0] },
+  ] } } }] }
+  const edited = setLayerTransformValue(source, 0, 'p', 10, [20, 30, 0], true)
+
+  assert.deepEqual(edited.layers[0].ks.p.k[0].e, [20, 30, 0])
+  assert.deepEqual(propertyValueAtFrame(edited.layers[0].ks.p, 5, [0, 0, 0]), [10, 15, 0])
+})

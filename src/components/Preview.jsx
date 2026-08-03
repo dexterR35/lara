@@ -64,6 +64,26 @@ function imageLayerBounds(layer, index, layers, assets, frame, cache) {
   }
 }
 
+function transformFromLottieMatrix(matrix) {
+  const props = matrix?.props
+  if (!props || props.length < 14) return null
+  const values = [props[0], props[1], props[4], props[5], props[12], props[13]].map(Number)
+  return values.every(Number.isFinite) ? new Konva.Transform(values) : null
+}
+
+function renderedLayerTransforms(instance, index, layers) {
+  const element = instance?.renderer?.elements?.[index]
+  const world = transformFromLottieMatrix(element?.finalTransform?.mat)
+  if (!world) return null
+  const layer = layers[index]
+  const parentIndex = layer?.parent == null ? -1 : layers.findIndex((candidate) => candidate.ind === layer.parent)
+  const parentElement = parentIndex >= 0 ? instance?.renderer?.elements?.[parentIndex] : null
+  return {
+    world,
+    parent: transformFromLottieMatrix(parentElement?.finalTransform?.mat) || new Konva.Transform(),
+  }
+}
+
 function previewReloadKey(source, sourceName, replacements) {
   if (!source) return 'none'
   return [
@@ -110,6 +130,7 @@ export default function Preview() {
   const hiddenSvgLayers = useRef(new Set())
   const guideRefs = useRef(new Map())
   const interaction = useRef(null)
+  const pendingVisualCommit = useRef(false)
   const selectedLayerIndicesRef = useRef(selectedLayerIndices)
   const animation = useRef(null)
   const currentFrameRef = useRef(currentFrame)
@@ -139,9 +160,23 @@ export default function Preview() {
       const opacity = Number(propertyValueAtFrame(layer.ks?.o, currentFrame, 100))
       if (layer.hd || currentFrame < starts || currentFrame >= ends || opacity <= 0) return null
       const geometry = imageLayerBounds(layer, index, source.layers, source.assets || [], currentFrame, cache)
+      const rendered = renderedLayerTransforms(animation.current, index, source.layers)
+      if (geometry && rendered) {
+        const decomposed = rendered.world.decompose()
+        Object.assign(geometry.attrs, {
+          x: decomposed.x,
+          y: decomposed.y,
+          scaleX: decomposed.scaleX,
+          scaleY: decomposed.scaleY,
+          rotation: decomposed.rotation,
+          skewX: decomposed.skewX,
+          skewY: decomposed.skewY,
+        })
+        geometry.parent = rendered.parent
+      }
       return geometry ? { layer, index, bounds: geometry.attrs, parentTransform: geometry.parent, asset: geometry.asset, previewSrc: replacements[geometry.asset.id]?.dataUrl || assetSource(geometry.asset) } : null
     }).filter(Boolean)
-  }, [currentFrame, firstFrame, lastFrame, replacements, source.assets, source.layers])
+  }, [currentFrame, firstFrame, lastFrame, previewReady, replacements, source.assets, source.layers])
   const hitLayers = useMemo(() => [...editableLayers].reverse(), [editableLayers])
   const imageSourcesKey = editableLayers.map(({ previewSrc }) => previewSrc).join('|')
   const selectionKey = selectedLayerIndices.join(',')
@@ -202,6 +237,13 @@ export default function Preview() {
   const hideSvgLayer = useCallback((item) => {
     const host = svgHost.current
     if (!host) return
+    const rendered = animation.current?.renderer?.elements?.[item.index]
+    const renderedElement = rendered?.baseElement || rendered?.transformedElement || rendered?.layerElement
+    if (renderedElement?.style) {
+      renderedElement.style.visibility = 'hidden'
+      hiddenSvgLayers.current.add(renderedElement)
+      return
+    }
     const sourceValue = item.previewSrc
     const assetPath = String(item.asset.p || '')
     const sameAssetBefore = source.layers.slice(0, item.index).filter((layer) => layer.refId === item.layer.refId).length
@@ -217,12 +259,10 @@ export default function Preview() {
   }, [source.layers])
 
   const syncHiddenSvgLayers = useCallback(() => {
-    if (!timelineOpen) {
-      clearHiddenSvg()
-      return
-    }
-    editableLayers.forEach(hideSvgLayer)
-  }, [editableLayers, hideSvgLayer, timelineOpen])
+    clearHiddenSvg()
+    if (!timelineOpen) return
+    editableLayers.filter((item) => dragIndices.includes(item.index)).forEach(hideSvgLayer)
+  }, [dragIndices, editableLayers, hideSvgLayer, timelineOpen])
 
   useEffect(() => {
     setPreviewError('')
@@ -238,6 +278,13 @@ export default function Preview() {
     let lastFrameUpdate = 0
     let initialized = false
     const data = structuredClone(mergedRef.current)
+
+    const finishVisualCommit = () => {
+      if (!pendingVisualCommit.current) return
+      pendingVisualCommit.current = false
+      clearHiddenSvg()
+      setDragIndices([])
+    }
 
     async function loadPreview() {
       try {
@@ -269,12 +316,18 @@ export default function Preview() {
           instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
           setPreviewReady(true)
         }
-        domReady = () => ready()
+        domReady = () => {
+          ready()
+          finishVisualCommit()
+        }
         loadedImages = () => {
           instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
+          finishVisualCommit()
         }
         failed = () => {
           clearHiddenSvg()
+          pendingVisualCommit.current = false
+          setDragIndices([])
           setPreviewError('The animation renderer could not load this composition.')
           setPreviewReady(false)
           notify('Preview could not render this Lottie file.', 'error')
@@ -478,6 +531,7 @@ export default function Preview() {
       entries,
     }
     entries.forEach(syncVisualToNode)
+    entries.forEach((entry) => hideSvgLayer(entry.item))
     setDragIndices(entries.map((entry) => entry.item.index))
     setMotionGuides(entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: entry.guideStart })))
     setStageCursor('grabbing')
@@ -515,9 +569,10 @@ export default function Preview() {
     if (current.raf) cancelAnimationFrame(current.raf)
     const guides = current.guides || current.entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: nodeCenter(entry.node) }))
     setMotionGuides(guides)
+    pendingVisualCommit.current = true
     current.entries.forEach((entry) => setLayerTransform(entry.item.index, 'p', currentFrame, valuesAfterInteraction(entry).position, true))
     interaction.current = null
-    setDragIndices([])
+    setBakeToken((token) => token + 1)
     setStageCursor('move')
   }
 
@@ -525,6 +580,7 @@ export default function Preview() {
     const current = interaction.current
     if (!current) return
     if (current.raf) cancelAnimationFrame(current.raf)
+    pendingVisualCommit.current = true
     current.entries.forEach((entry) => {
       const values = valuesAfterInteraction(entry)
       setLayerTransform(entry.item.index, 'p', currentFrame, values.position, true)
@@ -532,7 +588,7 @@ export default function Preview() {
       setLayerTransform(entry.item.index, 'r', currentFrame, values.rotation, true)
     })
     interaction.current = null
-    setDragIndices([])
+    setBakeToken((token) => token + 1)
     setMotionGuides([])
     setStageCursor('move')
   }
@@ -584,7 +640,7 @@ export default function Preview() {
               ref={(node) => node ? visualRefs.current.set(item.index, node) : visualRefs.current.delete(item.index)}
               image={cached?.ready ? cached.image : undefined}
               {...(busy ? {} : item.bounds)}
-              visible={timelineOpen && Boolean(cached?.ready)}
+              visible={busy && Boolean(cached?.ready)}
               listening={false}
             />
           })}

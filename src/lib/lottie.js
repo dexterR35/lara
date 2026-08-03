@@ -109,7 +109,11 @@ export const TRANSFORM_TRACKS = [
 ]
 
 const cloneValue = (value) => Array.isArray(value) ? [...value] : Number(value) || 0
-const normalizeValue = (value, fallback) => value == null ? cloneValue(fallback) : cloneValue(value)
+const normalizeValue = (value, fallback) => {
+  if (value == null) return cloneValue(fallback)
+  if (!Array.isArray(fallback) && Array.isArray(value)) return Number(value[0]) || 0
+  return cloneValue(value)
+}
 
 export function layerIdentity(layer, index) {
   return String(layer?.ind ?? `layer-${index}`)
@@ -157,11 +161,44 @@ function newKeyframe(frame, value, template) {
     i: structuredClone(template?.i ?? { x: 1, y: 1 }),
     o: structuredClone(template?.o ?? { x: 0, y: 0 }),
     t: frame,
-    s: cloneValue(value),
+    s: Array.isArray(value) ? cloneValue(value) : [cloneValue(value)],
   }
   if (template?.to) keyframe.to = Array.isArray(value) ? value.map(() => 0) : 0
   if (template?.ti) keyframe.ti = Array.isArray(value) ? value.map(() => 0) : 0
   return keyframe
+}
+
+function setTransformPropertyValue(property, frame, value, fallback, createKeyframe, initialFrame) {
+  const normalized = normalizeValue(value, fallback)
+  const keyframeValue = (candidate) => {
+    const result = normalizeValue(candidate, fallback)
+    return Array.isArray(result) ? result : [result]
+  }
+  if (!createKeyframe && property.a !== 1) {
+    property.a = 0
+    property.k = normalized
+    return
+  }
+
+  const targetFrame = Number(frame) || 0
+  let keyframes = propertyKeyframes(property).map((keyframe) => ({ ...keyframe, s: keyframeValue(keyframe.s) }))
+  if (!keyframes.length) {
+    const initialValue = propertyValueAtFrame(property, initialFrame, fallback)
+    if (initialFrame !== targetFrame) keyframes.push(newKeyframe(initialFrame, initialValue))
+  }
+  const existing = keyframes.find((keyframe) => Number(keyframe.t) === targetFrame)
+  if (existing) existing.s = keyframeValue(normalized)
+  else {
+    const template = keyframes.find((keyframe) => Number(keyframe.t) > targetFrame) || keyframes.at(-1)
+    keyframes.push(newKeyframe(targetFrame, normalized, template))
+  }
+  keyframes.sort((a, b) => Number(a.t) - Number(b.t))
+  keyframes.forEach((keyframe, index) => {
+    const next = keyframes[index + 1]
+    if (next && Object.hasOwn(keyframe, 'e')) keyframe.e = cloneValue(next.s)
+  })
+  property.a = 1
+  property.k = keyframes
 }
 
 export function setLayerTransformValue(data, layerIndex, track, frame, value, createKeyframe = false) {
@@ -173,36 +210,18 @@ export function setLayerTransformValue(data, layerIndex, track, frame, value, cr
   const fallback = definition?.fallback ?? 0
   const property = layer.ks[track] ||= { a: 0, k: cloneValue(fallback) }
   const normalized = normalizeValue(value, fallback)
+  const initialFrame = Number(result.ip) || 0
 
   if (track === 'p' && property.s && property.x && property.y) {
-    const combined = propertyValueAtFrame(property, frame, fallback)
-    Object.keys(property).forEach((key) => delete property[key])
-    property.a = 0
-    property.k = combined
-  }
-
-  if (!createKeyframe && property.a !== 1) {
-    property.a = 0
-    property.k = normalized
+    ;['x', 'y', 'z'].forEach((dimension, index) => {
+      if (!property[dimension] && dimension === 'z') return
+      const dimensionProperty = property[dimension] ||= { a: 0, k: Number(propertyValueAtFrame(property, frame, fallback)[index]) || 0 }
+      setTransformPropertyValue(dimensionProperty, frame, normalized[index], fallback[index], createKeyframe, initialFrame)
+    })
     return result
   }
 
-  const targetFrame = Number(frame) || 0
-  let keyframes = propertyKeyframes(property).map((keyframe) => ({ ...keyframe, s: normalizeValue(keyframe.s, fallback) }))
-  if (!keyframes.length) {
-    const initialFrame = Number(result.ip) || 0
-    const initialValue = propertyValueAtFrame(property, initialFrame, fallback)
-    if (initialFrame !== targetFrame) keyframes.push(newKeyframe(initialFrame, initialValue))
-  }
-  const existing = keyframes.find((keyframe) => Number(keyframe.t) === targetFrame)
-  if (existing) existing.s = normalized
-  else {
-    const template = keyframes.find((keyframe) => Number(keyframe.t) > targetFrame) || keyframes.at(-1)
-    keyframes.push(newKeyframe(targetFrame, normalized, template))
-  }
-  keyframes.sort((a, b) => Number(a.t) - Number(b.t))
-  property.a = 1
-  property.k = keyframes
+  setTransformPropertyValue(property, frame, normalized, fallback, createKeyframe, initialFrame)
   return result
 }
 
