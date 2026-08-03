@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Konva from 'konva'
-import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Transformer } from 'react-konva'
+import { Circle, Group, Layer, Line, Rect, Stage, Transformer } from 'react-konva'
 import { AlertTriangle, Maximize2, Minus, Move, Pause, Play, Plus, Repeat, RotateCcw, Scan } from 'lucide-react'
-import { assetSource, propertyValueAtFrame } from '../lib/lottie'
+import { propertyValueAtFrame } from '../lib/lottie'
 import { useWorkspace } from '../state/WorkspaceContext'
 import Button from './Button'
 
@@ -71,42 +71,26 @@ function transformFromLottieMatrix(matrix) {
   return values.every(Number.isFinite) ? new Konva.Transform(values) : null
 }
 
-function renderedLayerTransforms(instance, index, layers) {
+function renderedLayerTransform(instance, index) {
   const element = instance?.renderer?.elements?.[index]
-  const world = transformFromLottieMatrix(element?.finalTransform?.mat)
-  if (!world) return null
-  const layer = layers[index]
-  const parentIndex = layer?.parent == null ? -1 : layers.findIndex((candidate) => candidate.ind === layer.parent)
-  const parentElement = parentIndex >= 0 ? instance?.renderer?.elements?.[parentIndex] : null
-  return {
-    world,
-    parent: transformFromLottieMatrix(parentElement?.finalTransform?.mat) || new Konva.Transform(),
-  }
+  return transformFromLottieMatrix(element?.finalTransform?.mat)
 }
 
-function previewReloadKey(source, sourceName, replacements) {
-  if (!source) return 'none'
-  return [
-    sourceName,
-    source.w,
-    source.h,
-    source.ip,
-    source.op,
-    source.fr,
-    Object.keys(replacements).sort().map((id) => `${id}:${replacements[id]?.dataUrl?.length || 0}`).join(','),
-    source.layers.map((layer) => [layer.ind, layer.ty, layer.refId, layer.parent, layer.ip, layer.op, layer.hd ? 1 : 0].join(':')).join('|'),
-    (source.assets || []).map((asset) => {
-      const path = String(asset.p || '')
-      return [asset.id, asset.w, asset.h, path.startsWith('data:') ? `d${path.length}` : `${asset.u || ''}${path}`].join(':')
-    }).join('|'),
-  ].join('::')
+function transformFromSvgAttribute(value) {
+  const match = String(value || '').match(/^matrix\(\s*([^)]*)\)$/)
+  if (!match) return new Konva.Transform()
+  const values = match[1].split(/[\s,]+/).filter(Boolean).map(Number)
+  return values.length === 6 && values.every(Number.isFinite) ? new Konva.Transform(values) : new Konva.Transform()
+}
+
+function svgMatrix(transform) {
+  return `matrix(${transform.getMatrix().map((value) => Math.round(value * 100000) / 100000).join(',')})`
 }
 
 export default function Preview() {
   const {
     merged,
     source,
-    sourceName,
     replacements,
     notify,
     selectedLayerIndices,
@@ -125,17 +109,12 @@ export default function Preview() {
   const stageRef = useRef(null)
   const transformerRef = useRef(null)
   const nodeRefs = useRef(new Map())
-  const visualRefs = useRef(new Map())
-  const imageCache = useRef(new Map())
-  const hiddenSvgLayers = useRef(new Set())
   const guideRefs = useRef(new Map())
   const interaction = useRef(null)
   const pendingVisualCommit = useRef(false)
   const selectedLayerIndicesRef = useRef(selectedLayerIndices)
   const animation = useRef(null)
   const currentFrameRef = useRef(currentFrame)
-  const mergedRef = useRef(merged)
-  const timelineWasOpen = useRef(timelineOpen)
   const [playing, setPlaying] = useState(false)
   const [looping, setLooping] = useState(true)
   const [previewError, setPreviewError] = useState('')
@@ -144,14 +123,11 @@ export default function Preview() {
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
   const [motionGuides, setMotionGuides] = useState([])
   const [dragIndices, setDragIndices] = useState([])
-  const [bakeToken, setBakeToken] = useState(0)
-  const [, refreshImages] = useState(0)
   const replacementCount = useMemo(() => Object.keys(replacements).length, [replacements])
   const width = Math.max(Number(merged.w) || 1, 1)
   const height = Math.max(Number(merged.h) || 1, 1)
   const firstFrame = Number(source.ip) || 0
   const lastFrame = Number(source.op) || firstFrame + 1
-  const reloadKey = useMemo(() => previewReloadKey(source, sourceName, replacements), [source, sourceName, replacements])
   const editableLayers = useMemo(() => {
     const cache = new Map()
     return source.layers.map((layer, index) => {
@@ -160,9 +136,9 @@ export default function Preview() {
       const opacity = Number(propertyValueAtFrame(layer.ks?.o, currentFrame, 100))
       if (layer.hd || currentFrame < starts || currentFrame >= ends || opacity <= 0) return null
       const geometry = imageLayerBounds(layer, index, source.layers, source.assets || [], currentFrame, cache)
-      const rendered = renderedLayerTransforms(animation.current, index, source.layers)
+      const rendered = renderedLayerTransform(animation.current, index)
       if (geometry && rendered) {
-        const decomposed = rendered.world.decompose()
+        const decomposed = rendered.decompose()
         Object.assign(geometry.attrs, {
           x: decomposed.x,
           y: decomposed.y,
@@ -172,42 +148,17 @@ export default function Preview() {
           skewX: decomposed.skewX,
           skewY: decomposed.skewY,
         })
-        geometry.parent = rendered.parent
       }
-      return geometry ? { layer, index, bounds: geometry.attrs, parentTransform: geometry.parent, asset: geometry.asset, previewSrc: replacements[geometry.asset.id]?.dataUrl || assetSource(geometry.asset) } : null
+      return geometry ? { layer, index, bounds: geometry.attrs, parentTransform: geometry.parent, asset: geometry.asset } : null
     }).filter(Boolean)
-  }, [currentFrame, firstFrame, lastFrame, previewReady, replacements, source.assets, source.layers])
+  }, [currentFrame, firstFrame, lastFrame, previewReady, source.assets, source.layers])
   const hitLayers = useMemo(() => [...editableLayers].reverse(), [editableLayers])
-  const imageSourcesKey = editableLayers.map(({ previewSrc }) => previewSrc).join('|')
   const selectionKey = selectedLayerIndices.join(',')
   const dragKey = dragIndices.join(',')
-
-  mergedRef.current = merged
 
   useEffect(() => { currentFrameRef.current = currentFrame }, [currentFrame])
   useEffect(() => { selectedLayerIndicesRef.current = selectedLayerIndices }, [selectedLayerIndices])
   useEffect(() => { if (!interaction.current) setMotionGuides([]) }, [selectionKey])
-  useEffect(() => {
-    if (timelineWasOpen.current && !timelineOpen) setBakeToken((token) => token + 1)
-    timelineWasOpen.current = timelineOpen
-  }, [timelineOpen])
-
-  useEffect(() => {
-    let disposed = false
-    editableLayers.forEach(({ previewSrc }) => {
-      if (!previewSrc || imageCache.current.has(previewSrc)) return
-      const image = new window.Image()
-      const entry = { image, ready: false }
-      imageCache.current.set(previewSrc, entry)
-      image.onload = () => {
-        entry.ready = true
-        if (!disposed) refreshImages((version) => version + 1)
-      }
-      image.onerror = () => { entry.failed = true }
-      image.src = previewSrc
-    })
-    return () => { disposed = true }
-  }, [imageSourcesKey])
 
   const fitCanvas = useCallback(() => {
     const scale = clampZoom(Math.min((viewportSize.width - 64) / width, (viewportSize.height - 64) / height))
@@ -229,45 +180,9 @@ export default function Preview() {
 
   useEffect(() => { fitCanvas() }, [fitCanvas])
 
-  const clearHiddenSvg = () => {
-    hiddenSvgLayers.current.forEach((element) => { element.style.visibility = '' })
-    hiddenSvgLayers.current.clear()
-  }
-
-  const hideSvgLayer = useCallback((item) => {
-    const host = svgHost.current
-    if (!host) return
-    const rendered = animation.current?.renderer?.elements?.[item.index]
-    const renderedElement = rendered?.baseElement || rendered?.transformedElement || rendered?.layerElement
-    if (renderedElement?.style) {
-      renderedElement.style.visibility = 'hidden'
-      hiddenSvgLayers.current.add(renderedElement)
-      return
-    }
-    const sourceValue = item.previewSrc
-    const assetPath = String(item.asset.p || '')
-    const sameAssetBefore = source.layers.slice(0, item.index).filter((layer) => layer.refId === item.layer.refId).length
-    const candidates = [...host.querySelectorAll('image')].filter((element) => {
-      if (element.closest('defs')) return false
-      const href = element.getAttribute('href') || element.getAttribute('xlink:href') || ''
-      return href === sourceValue || href.endsWith(sourceValue) || (assetPath && href.endsWith(assetPath))
-    })
-    const element = candidates[sameAssetBefore] || candidates[0]
-    if (!element) return
-    element.style.visibility = 'hidden'
-    hiddenSvgLayers.current.add(element)
-  }, [source.layers])
-
-  const syncHiddenSvgLayers = useCallback(() => {
-    clearHiddenSvg()
-    if (!timelineOpen) return
-    editableLayers.filter((item) => dragIndices.includes(item.index)).forEach(hideSvgLayer)
-  }, [dragIndices, editableLayers, hideSvgLayer, timelineOpen])
-
   useEffect(() => {
     setPreviewError('')
     setPreviewReady(false)
-    clearHiddenSvg()
     let disposed = false
     let instance
     let update
@@ -277,12 +192,11 @@ export default function Preview() {
     let failed
     let lastFrameUpdate = 0
     let initialized = false
-    const data = structuredClone(mergedRef.current)
+    const data = structuredClone(merged)
 
     const finishVisualCommit = () => {
       if (!pendingVisualCommit.current) return
       pendingVisualCommit.current = false
-      clearHiddenSvg()
       setDragIndices([])
     }
 
@@ -325,7 +239,6 @@ export default function Preview() {
           finishVisualCommit()
         }
         failed = () => {
-          clearHiddenSvg()
           pendingVisualCommit.current = false
           setDragIndices([])
           setPreviewError('The animation renderer could not load this composition.')
@@ -342,6 +255,8 @@ export default function Preview() {
         setPlaying(false)
       } catch (error) {
         if (disposed) return
+        pendingVisualCommit.current = false
+        setDragIndices([])
         setPreviewError(error.message || 'The preview could not be created.')
         setPreviewReady(false)
         notify('Preview could not render this Lottie file.', 'error')
@@ -363,12 +278,7 @@ export default function Preview() {
       }
       if (animation.current === instance) animation.current = null
     }
-  }, [bakeToken, firstFrame, height, notify, reloadKey, setCurrentFrame, width])
-
-  useEffect(() => {
-    if (!previewReady) return
-    syncHiddenSvgLayers()
-  }, [previewReady, syncHiddenSvgLayers])
+  }, [firstFrame, height, merged, notify, setCurrentFrame, width])
 
   useEffect(() => {
     const onSeek = (event) => {
@@ -393,7 +303,6 @@ export default function Preview() {
     editableLayers.forEach((item) => {
       if (dragIndices.includes(item.index)) return
       nodeRefs.current.get(item.index)?.setAttrs(item.bounds)
-      visualRefs.current.get(item.index)?.setAttrs({ ...item.bounds, visible: timelineOpen })
     })
     transformerRef.current?.forceUpdate()
     transformerRef.current?.getLayer()?.batchDraw()
@@ -463,37 +372,36 @@ export default function Preview() {
     setPlaying(true)
   }
 
-  const syncVisualToNode = (entry) => {
-    const visual = visualRefs.current.get(entry.item.index)
-    if (!visual) return false
-    visual.setAttrs({
-      x: entry.node.x(),
-      y: entry.node.y(),
-      scaleX: entry.node.scaleX(),
-      scaleY: entry.node.scaleY(),
-      rotation: entry.node.rotation(),
-      skewX: entry.node.skewX(),
-      skewY: entry.node.skewY(),
-      visible: true,
-    })
+  const syncSvgToNode = (entry) => {
+    if (!entry.svgElement) return false
+    const delta = entry.node.getTransform().copy().multiply(entry.nodeStartInverse)
+    entry.svgElement.setAttribute('transform', svgMatrix(delta.multiply(entry.svgTransform.copy())))
     return true
   }
 
   const valuesAfterInteraction = (entry) => {
-    const anchor = entry.anchor
-    const local = entry.parentInverse.copy().multiply(entry.node.getTransform().copy())
-    local.translate(Number(anchor[0]) || 0, Number(anchor[1]) || 0)
-    const value = local.decompose()
     const finite = (candidate, fallback) => Number.isFinite(candidate) ? rounded(candidate) : Number(fallback) || 0
     const scale = (candidate, fallback) => {
       if (!Number.isFinite(candidate)) return Number(fallback) || 100
       const sign = candidate < 0 ? -1 : 1
-      return rounded(sign * Math.min(10000, Math.max(.1, Math.abs(candidate * 100))))
+      return rounded(sign * Math.min(10000, Math.max(.1, Math.abs(candidate))))
     }
+    const from = entry.parentInverse.point(entry.worldPoint)
+    const to = entry.parentInverse.point({ x: entry.node.x(), y: entry.node.y() })
+    const scaleXRatio = Math.abs(entry.nodeStart.scaleX) > .000001 ? entry.node.scaleX() / entry.nodeStart.scaleX : 1
+    const scaleYRatio = Math.abs(entry.nodeStart.scaleY) > .000001 ? entry.node.scaleY() / entry.nodeStart.scaleY : 1
     return {
-      position: [finite(value.x, entry.oldPosition[0]), finite(value.y, entry.oldPosition[1]), entry.oldPosition[2] || 0],
-      scale: [scale(value.scaleX, entry.oldScale[0]), scale(value.scaleY, entry.oldScale[1]), entry.oldScale[2] ?? 100],
-      rotation: finite(value.rotation, entry.oldRotation),
+      position: [
+        finite(Number(entry.oldPosition[0]) + to.x - from.x, entry.oldPosition[0]),
+        finite(Number(entry.oldPosition[1]) + to.y - from.y, entry.oldPosition[1]),
+        entry.oldPosition[2] || 0,
+      ],
+      scale: [
+        scale(Number(entry.oldScale[0]) * scaleXRatio, entry.oldScale[0]),
+        scale(Number(entry.oldScale[1]) * scaleYRatio, entry.oldScale[1]),
+        entry.oldScale[2] ?? 100,
+      ],
+      rotation: finite(Number(entry.oldRotation) + entry.node.rotation() - entry.nodeStart.rotation, entry.oldRotation),
     }
   }
 
@@ -512,17 +420,24 @@ export default function Preview() {
       const layer = source.layers[index]
       if (!editable || !target || !layer) return null
       const center = nodeCenter(target)
-      const oldPosition = propertyValueAtFrame(layer.ks?.p, currentFrame, [0, 0, 0])
+      const svgElement = animation.current?.renderer?.elements?.[index]?.transformedElement || null
       return {
         item: editable,
         node: target,
         guideStart: center,
         worldPoint: { x: target.x(), y: target.y() },
-        anchor: propertyValueAtFrame(layer.ks?.a, currentFrame, [0, 0, 0]),
-        oldPosition,
+        oldPosition: propertyValueAtFrame(layer.ks?.p, currentFrame, [0, 0, 0]),
         oldScale: propertyValueAtFrame(layer.ks?.s, currentFrame, [100, 100, 100]),
         oldRotation: propertyValueAtFrame(layer.ks?.r, currentFrame, 0),
         parentInverse: editable.parentTransform.copy().invert(),
+        nodeStart: {
+          scaleX: target.scaleX(),
+          scaleY: target.scaleY(),
+          rotation: target.rotation(),
+        },
+        nodeStartInverse: target.getTransform().copy().invert(),
+        svgElement,
+        svgTransform: transformFromSvgAttribute(svgElement?.getAttribute('transform')),
       }
     }).filter(Boolean)
     interaction.current = {
@@ -530,8 +445,6 @@ export default function Preview() {
       activePoint: { x: node.x(), y: node.y() },
       entries,
     }
-    entries.forEach(syncVisualToNode)
-    entries.forEach((entry) => hideSvgLayer(entry.item))
     setDragIndices(entries.map((entry) => entry.item.index))
     setMotionGuides(entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: entry.guideStart })))
     setStageCursor('grabbing')
@@ -549,7 +462,7 @@ export default function Preview() {
         if (entry.item.index !== item.index) entry.node.position({ x: entry.worldPoint.x + dx, y: entry.worldPoint.y + dy })
       })
     }
-    current.entries.forEach(syncVisualToNode)
+    current.entries.forEach(syncSvgToNode)
     current.guides = current.entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: nodeCenter(entry.node) }))
     if (!current.raf) {
       current.raf = requestAnimationFrame(() => {
@@ -572,7 +485,6 @@ export default function Preview() {
     pendingVisualCommit.current = true
     current.entries.forEach((entry) => setLayerTransform(entry.item.index, 'p', currentFrame, valuesAfterInteraction(entry).position, true))
     interaction.current = null
-    setBakeToken((token) => token + 1)
     setStageCursor('move')
   }
 
@@ -588,7 +500,6 @@ export default function Preview() {
       setLayerTransform(entry.item.index, 'r', currentFrame, values.rotation, true)
     })
     interaction.current = null
-    setBakeToken((token) => token + 1)
     setMotionGuides([])
     setStageCursor('move')
   }
@@ -601,7 +512,7 @@ export default function Preview() {
   }
 
   const transformSelection = () => {
-    interaction.current?.entries.forEach(syncVisualToNode)
+    interaction.current?.entries.forEach(syncSvgToNode)
     transformerRef.current?.getLayer()?.batchDraw()
   }
 
@@ -633,25 +544,12 @@ export default function Preview() {
       >
         <Layer>
           {hitLayers.map((item) => {
-            const cached = imageCache.current.get(item.previewSrc)
-            const busy = dragIndices.includes(item.index)
-            return <KonvaImage
-              key={`visual-${item.layer.ind ?? item.index}-${item.layer.refId}`}
-              ref={(node) => node ? visualRefs.current.set(item.index, node) : visualRefs.current.delete(item.index)}
-              image={cached?.ready ? cached.image : undefined}
-              {...(busy ? {} : item.bounds)}
-              visible={busy && Boolean(cached?.ready)}
-              listening={false}
-            />
-          })}
-          {hitLayers.map((item) => {
-            const busy = dragIndices.includes(item.index)
             const selected = selectedLayerIndices.includes(item.index)
             const hovered = hoveredLayerIndex === item.index
             return <Rect
               key={`${item.layer.ind ?? item.index}-${item.layer.refId}`}
               ref={(node) => node ? nodeRefs.current.set(item.index, node) : nodeRefs.current.delete(item.index)}
-              {...(busy ? {} : item.bounds)}
+              {...item.bounds}
               fill="rgba(226,72,72,0.001)"
               stroke={selected ? PRIMARY : hovered ? 'rgba(226,72,72,.75)' : 'transparent'}
               strokeWidth={selected ? 1.5 / Math.max(view.scale, .65) : hovered ? .8 / Math.max(view.scale, .65) : 0}

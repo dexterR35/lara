@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import JSZip from 'jszip'
-import { dataUrlToBlob, embeddedImageAssets, fontReferences, matchAssetFiles, parseLottieFile, parseLottieJson, propertyValueAtFrame, safeBaseName, setLayerTransformValue } from '../src/lib/lottie.js'
+import { dataUrlToBlob, embeddedImageAssets, fontReferences, matchAssetFiles, mergedLottie, parseLottieFile, parseLottieJson, propertyValueAtFrame, safeBaseName, setLayerTransformValue } from '../src/lib/lottie.js'
 
 const minimal = { v: '5.12.0', w: 200, h: 100, fr: 30, ip: 0, op: 60, layers: [] }
 
@@ -108,4 +108,33 @@ test('updates a preceding keyframe endpoint when an existing point moves', () =>
 
   assert.deepEqual(edited.layers[0].ks.p.k[0].e, [20, 30, 0])
   assert.deepEqual(propertyValueAtFrame(edited.layers[0].ks.p, 5, [0, 0, 0]), [10, 15, 0])
+})
+
+test('samples temporal easing instead of treating every keyframe as linear', () => {
+  const property = { a: 1, k: [
+    { t: 0, s: [0], o: { x: .42, y: 0 }, i: { x: 1, y: 1 } },
+    { t: 10, s: [100] },
+  ] }
+  const halfway = propertyValueAtFrame(property, 5, 0)
+
+  assert.ok(halfway > 30 && halfway < 33, `expected ease-in value near 31.5, received ${halfway}`)
+})
+
+test('samples spatial motion tangents along the curved path', () => {
+  const property = { a: 1, k: [
+    { t: 0, s: [0, 0, 0], to: [0, 100, 0], ti: [0, 100, 0], o: { x: 0, y: 0 }, i: { x: 1, y: 1 } },
+    { t: 10, s: [100, 0, 0] },
+  ] }
+  const halfway = propertyValueAtFrame(property, 5, [0, 0, 0])
+
+  assert.ok(Math.abs(halfway[0] - 50) < .1)
+  assert.ok(Math.abs(halfway[1] - 75) < .1)
+})
+
+test('treats replacements for external images as embedded export assets', () => {
+  const source = { ...minimal, assets: [{ id: 'photo', p: 'photo.png', u: 'images/', w: 10, h: 10 }] }
+  const merged = mergedLottie(source, { photo: { dataUrl: 'data:image/png;base64,AA==' } })
+
+  assert.equal(embeddedImageAssets(source).length, 0)
+  assert.equal(embeddedImageAssets(merged).length, 1)
 })

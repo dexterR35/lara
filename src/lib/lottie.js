@@ -129,6 +129,62 @@ export function propertyKeyframes(property) {
   return property.k.filter((keyframe) => keyframe && Number.isFinite(Number(keyframe.t)))
 }
 
+const cubic = (start, control1, control2, end, amount) => {
+  const inverse = 1 - amount
+  return inverse ** 3 * start + 3 * inverse ** 2 * amount * control1 + 3 * inverse * amount ** 2 * control2 + amount ** 3 * end
+}
+
+function easingCoordinate(value, dimension = 0) {
+  if (!Array.isArray(value)) return Number(value)
+  return Number(value[dimension] ?? value[0])
+}
+
+function easedProgress(keyframe, progress, dimension = 0) {
+  if (progress <= 0 || progress >= 1) return progress
+  const outX = easingCoordinate(keyframe.o?.x, dimension)
+  const outY = easingCoordinate(keyframe.o?.y, dimension)
+  const inX = easingCoordinate(keyframe.i?.x, dimension)
+  const inY = easingCoordinate(keyframe.i?.y, dimension)
+  if (![outX, outY, inX, inY].every(Number.isFinite)) return progress
+  if (outX === outY && inX === inY) return progress
+  let low = 0
+  let high = 1
+  for (let iteration = 0; iteration < 18; iteration += 1) {
+    const amount = (low + high) / 2
+    if (cubic(0, outX, inX, 1, amount) < progress) low = amount
+    else high = amount
+  }
+  return cubic(0, outY, inY, 1, (low + high) / 2)
+}
+
+function spatialValue(start, end, outgoing, incoming, progress) {
+  const dimensions = Math.max(start.length, end.length)
+  const point = (amount) => Array.from({ length: dimensions }, (_, index) => cubic(
+    Number(start[index]) || 0,
+    (Number(start[index]) || 0) + (Number(outgoing[index]) || 0),
+    (Number(end[index]) || 0) + (Number(incoming[index]) || 0),
+    Number(end[index]) || 0,
+    amount,
+  ))
+  const samples = [{ amount: 0, value: point(0), length: 0 }]
+  let total = 0
+  for (let index = 1; index <= 100; index += 1) {
+    const value = point(index / 100)
+    const previous = samples.at(-1).value
+    total += Math.hypot(...value.map((coordinate, dimension) => coordinate - previous[dimension]))
+    samples.push({ amount: index / 100, value, length: total })
+  }
+  if (!total) return [...start]
+  const target = total * progress
+  const afterIndex = samples.findIndex((sample) => sample.length >= target)
+  if (afterIndex <= 0) return samples[0].value
+  const before = samples[afterIndex - 1]
+  const after = samples[afterIndex]
+  const segment = after.length - before.length
+  const amount = segment ? (target - before.length) / segment : 0
+  return before.value.map((coordinate, index) => coordinate + (after.value[index] - coordinate) * amount)
+}
+
 export function propertyValueAtFrame(property, frame, fallback = 0) {
   if (!property) return cloneValue(fallback)
   if (property.s && property.x && property.y) {
@@ -150,10 +206,17 @@ export function propertyValueAtFrame(property, frame, fallback = 0) {
   }
   const start = normalizeValue(current.s, fallback)
   if (!next || current.h === 1 || Number(next.t) === Number(current.t)) return start
-  const end = normalizeValue(current.e ?? next.s, start)
+  const end = normalizeValue(next.s ?? current.e, start)
   const progress = Math.max(0, Math.min(1, (target - Number(current.t)) / (Number(next.t) - Number(current.t))))
-  if (Array.isArray(start)) return start.map((value, index) => value + ((end[index] ?? value) - value) * progress)
-  return start + (end - start) * progress
+  if (Array.isArray(start)) {
+    const temporal = easedProgress(current, progress)
+    if (Array.isArray(current.to) && Array.isArray(current.ti)) return spatialValue(start, end, current.to, current.ti, temporal)
+    return start.map((value, index) => {
+      const amount = easedProgress(current, progress, index)
+      return value + ((end[index] ?? value) - value) * amount
+    })
+  }
+  return start + (end - start) * easedProgress(current, progress)
 }
 
 function newKeyframe(frame, value, template) {

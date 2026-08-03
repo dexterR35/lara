@@ -22,7 +22,8 @@ export default function ExportCard() {
   const [busy, setBusy] = useState(false)
   const base = safeBaseName(sourceName)
   const fonts = fontReferences(source)
-  const imageCount = embeddedImageAssets(source).length
+  const images = embeddedImageAssets(merged)
+  const imageCount = images.length
 
   const batch = async (files) => {
     try { await applyBatch(files) }
@@ -52,9 +53,9 @@ export default function ExportCard() {
       zip.file(`${base}-rebuilt.json`, JSON.stringify(merged))
       const folder = zip.folder(`${base}-assets`)
       const manifest = []
-      embeddedImageAssets(source).forEach((asset) => {
+      images.forEach((asset) => {
         const replacement = replacements[asset.id]
-        const payload = replacement?.dataUrl || (String(asset.p).startsWith('data:image') ? asset.p : null)
+        const payload = String(asset.p).startsWith('data:image') ? asset.p : null
         if (!payload) return
         const filename = replacement?.name || expectedFilename(asset)
         folder.file(filename, dataUrlToBlob(payload))
