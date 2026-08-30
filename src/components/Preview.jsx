@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Konva from 'konva'
 import { Circle, Group, Layer, Line, Rect, Stage, Transformer } from 'react-konva'
 import { AlertTriangle, Maximize2, Minus, Move, Pause, Play, Plus, Repeat, RotateCcw, Scan } from 'lucide-react'
-import { propertyValueAtFrame } from '../lib/lottie'
+import { compositionFrameBounds, lottieForPreview, propertyValueAtFrame } from '../lib/lottie'
 import { useWorkspace } from '../state/WorkspaceContext'
 import Button from './Button'
 
@@ -31,21 +31,24 @@ function layerTransform(layer, frame) {
   return transform
 }
 
-function worldTransform(index, layers, frame, cache) {
+function worldTransform(index, layers, frame, cache, layerIndicesById, visiting = new Set()) {
   if (cache.has(index)) return cache.get(index)
+  if (visiting.has(index)) return { world: new Konva.Transform(), parent: new Konva.Transform() }
+  visiting.add(index)
   const layer = layers[index]
-  const parentIndex = layer?.parent == null ? -1 : layers.findIndex((candidate) => candidate.ind === layer.parent)
-  const parent = parentIndex >= 0 ? worldTransform(parentIndex, layers, frame, cache).world : new Konva.Transform()
+  const parentIndex = layer?.parent == null ? -1 : layerIndicesById.get(String(layer.parent)) ?? -1
+  const parent = parentIndex >= 0 ? worldTransform(parentIndex, layers, frame, cache, layerIndicesById, visiting).world : new Konva.Transform()
   const world = parent.copy().multiply(layerTransform(layer, frame))
   const result = { world, parent }
+  visiting.delete(index)
   cache.set(index, result)
   return result
 }
 
-function imageLayerBounds(layer, index, layers, assets, frame, cache) {
-  const asset = assets.find((item) => item.id === layer.refId)
+function imageLayerBounds(layer, index, layers, assetsById, layerIndicesById, frame, cache) {
+  const asset = assetsById.get(String(layer.refId))
   if (!asset || Array.isArray(asset.layers)) return null
-  const { world, parent } = worldTransform(index, layers, frame, cache)
+  const { world, parent } = worldTransform(index, layers, frame, cache, layerIndicesById)
   const decomposed = world.decompose()
   return {
     attrs: {
@@ -102,7 +105,7 @@ export default function Preview() {
     setCurrentFrame,
     seekFrame,
     timelineOpen,
-    setLayerTransform,
+    setLayerTransforms,
   } = useWorkspace()
   const viewport = useRef(null)
   const svgHost = useRef(null)
@@ -126,16 +129,26 @@ export default function Preview() {
   const replacementCount = useMemo(() => Object.keys(replacements).length, [replacements])
   const width = Math.max(Number(merged.w) || 1, 1)
   const height = Math.max(Number(merged.h) || 1, 1)
-  const firstFrame = Number(source.ip) || 0
-  const lastFrame = Number(source.op) || firstFrame + 1
+  const { start: firstFrame, end: lastFrame } = compositionFrameBounds(source)
+  const assetsById = useMemo(() => new Map((source.assets || []).map((asset) => [String(asset.id), asset])), [source.assets])
+  const layerIndicesById = useMemo(() => {
+    const result = new Map()
+    source.layers.forEach((layer, index) => {
+      const id = String(layer.ind)
+      if (!result.has(id)) result.set(id, index)
+    })
+    return result
+  }, [source.layers])
   const editableLayers = useMemo(() => {
     const cache = new Map()
     return source.layers.map((layer, index) => {
-      const starts = Number(layer.ip ?? firstFrame)
-      const ends = Number(layer.op ?? lastFrame)
+      const rawStart = Number(layer.ip)
+      const rawEnd = Number(layer.op)
+      const starts = Number.isFinite(rawStart) ? rawStart : firstFrame
+      const ends = Number.isFinite(rawEnd) ? rawEnd : lastFrame + 1
       const opacity = Number(propertyValueAtFrame(layer.ks?.o, currentFrame, 100))
       if (layer.hd || currentFrame < starts || currentFrame >= ends || opacity <= 0) return null
-      const geometry = imageLayerBounds(layer, index, source.layers, source.assets || [], currentFrame, cache)
+      const geometry = imageLayerBounds(layer, index, source.layers, assetsById, layerIndicesById, currentFrame, cache)
       const rendered = renderedLayerTransform(animation.current, index)
       if (geometry && rendered) {
         const decomposed = rendered.decompose()
@@ -151,7 +164,7 @@ export default function Preview() {
       }
       return geometry ? { layer, index, bounds: geometry.attrs, parentTransform: geometry.parent, asset: geometry.asset } : null
     }).filter(Boolean)
-  }, [currentFrame, firstFrame, lastFrame, previewReady, source.assets, source.layers])
+  }, [assetsById, currentFrame, firstFrame, lastFrame, layerIndicesById, previewReady, source.layers])
   const hitLayers = useMemo(() => [...editableLayers].reverse(), [editableLayers])
   const selectionKey = selectedLayerIndices.join(',')
   const dragKey = dragIndices.join(',')
@@ -190,9 +203,9 @@ export default function Preview() {
     let domReady
     let loadedImages
     let failed
+    let completed
     let lastFrameUpdate = 0
-    let initialized = false
-    const data = structuredClone(merged)
+    const data = lottieForPreview(merged)
 
     const finishVisualCommit = () => {
       if (!pendingVisualCommit.current) return
@@ -202,29 +215,23 @@ export default function Preview() {
 
     async function loadPreview() {
       try {
-        const { default: lottie } = await import('lottie-web/build/player/esm/lottie_svg.min.js')
+        const { default: lottie } = await import('lottie-web/build/player/esm/lottie_light.min.js')
         if (disposed || !svgHost.current) return
-        svgHost.current.innerHTML = ''
+        svgHost.current.replaceChildren()
         instance = lottie.loadAnimation({
           container: svgHost.current,
           renderer: 'svg',
           loop: looping,
-          autoplay: true,
+          autoplay: false,
           animationData: data,
           rendererSettings: { preserveAspectRatio: 'xMidYMid meet', clearCanvas: true },
         })
         animation.current = instance
         update = () => {
-          if (!initialized) {
-            initialized = true
-            instance.pause()
-            instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
-            setPreviewReady(true)
-          }
           const now = performance.now()
           if (now - lastFrameUpdate < 80) return
           lastFrameUpdate = now
-          setCurrentFrame(firstFrame + instance.currentFrame)
+          setCurrentFrame(Math.min(lastFrame, firstFrame + instance.currentFrame))
         }
         ready = () => {
           instance.goToAndStop(Math.max(0, currentFrameRef.current - firstFrame), true)
@@ -245,6 +252,10 @@ export default function Preview() {
           setPreviewReady(false)
           notify('Preview could not render this Lottie file.', 'error')
         }
+        completed = () => {
+          setCurrentFrame(lastFrame)
+          setPlaying(false)
+        }
         instance.addEventListener('enterFrame', update)
         instance.addEventListener('drawnFrame', update)
         instance.addEventListener('config_ready', ready)
@@ -252,6 +263,7 @@ export default function Preview() {
         instance.addEventListener('DOMLoaded', domReady)
         instance.addEventListener('loaded_images', loadedImages)
         instance.addEventListener('data_failed', failed)
+        instance.addEventListener('complete', completed)
         setPlaying(false)
       } catch (error) {
         if (disposed) return
@@ -274,11 +286,12 @@ export default function Preview() {
         instance.removeEventListener('DOMLoaded', domReady)
         instance.removeEventListener('loaded_images', loadedImages)
         instance.removeEventListener('data_failed', failed)
+        instance.removeEventListener('complete', completed)
         instance.destroy()
       }
       if (animation.current === instance) animation.current = null
     }
-  }, [firstFrame, height, merged, notify, setCurrentFrame, width])
+  }, [firstFrame, height, lastFrame, merged, notify, setCurrentFrame, width])
 
   useEffect(() => {
     const onSeek = (event) => {
@@ -353,9 +366,10 @@ export default function Preview() {
 
   const toggle = () => {
     if (!animation.current) return
-    if (playing) animation.current.pause()
-    else animation.current.play()
-    setPlaying(!playing)
+    const shouldPlay = animation.current.isPaused
+    if (shouldPlay) animation.current.play()
+    else animation.current.pause()
+    setPlaying(shouldPlay)
   }
 
   const toggleLoop = () => {
@@ -443,6 +457,7 @@ export default function Preview() {
     interaction.current = {
       activeIndex: item.index,
       activePoint: { x: node.x(), y: node.y() },
+      frame: currentFrame,
       entries,
     }
     setDragIndices(entries.map((entry) => entry.item.index))
@@ -483,7 +498,7 @@ export default function Preview() {
     const guides = current.guides || current.entries.map((entry) => ({ index: entry.item.index, start: entry.guideStart, end: nodeCenter(entry.node) }))
     setMotionGuides(guides)
     pendingVisualCommit.current = true
-    current.entries.forEach((entry) => setLayerTransform(entry.item.index, 'p', currentFrame, valuesAfterInteraction(entry).position, true))
+    setLayerTransforms(current.entries.map((entry) => ({ layerIndex: entry.item.index, track: 'p', frame: current.frame, value: valuesAfterInteraction(entry).position, createKeyframe: true })))
     interaction.current = null
     setStageCursor('move')
   }
@@ -493,12 +508,15 @@ export default function Preview() {
     if (!current) return
     if (current.raf) cancelAnimationFrame(current.raf)
     pendingVisualCommit.current = true
-    current.entries.forEach((entry) => {
+    const edits = current.entries.flatMap((entry) => {
       const values = valuesAfterInteraction(entry)
-      setLayerTransform(entry.item.index, 'p', currentFrame, values.position, true)
-      setLayerTransform(entry.item.index, 's', currentFrame, values.scale, true)
-      setLayerTransform(entry.item.index, 'r', currentFrame, values.rotation, true)
+      return [
+        { layerIndex: entry.item.index, track: 'p', frame: current.frame, value: values.position, createKeyframe: true },
+        { layerIndex: entry.item.index, track: 's', frame: current.frame, value: values.scale, createKeyframe: true },
+        { layerIndex: entry.item.index, track: 'r', frame: current.frame, value: values.rotation, createKeyframe: true },
+      ]
     })
+    setLayerTransforms(edits)
     interaction.current = null
     setMotionGuides([])
     setStageCursor('move')
@@ -631,7 +649,7 @@ export default function Preview() {
       <Button variant="icon" icon={RotateCcw} disabled={!previewReady} aria-label="Restart animation" onClick={restart}/>
       <Button variant="icon" className={playing ? 'is-active' : ''} icon={playing ? Pause : Play} disabled={!previewReady} aria-label={playing ? 'Pause' : 'Play'} aria-pressed={playing} onClick={toggle}/>
       <Button variant="icon" className={looping ? 'is-active' : ''} icon={Repeat} disabled={!previewReady} aria-label={looping ? 'Disable loop' : 'Enable loop'} aria-pressed={looping} onClick={toggleLoop}/>
-      <input aria-label="Animation frame" type="range" min={firstFrame} max={lastFrame} value={Math.min(lastFrame, currentFrame)} disabled={!previewReady} onChange={(event) => seekFrame(Number(event.target.value))}/>
+      <input aria-label="Animation frame" type="range" min={firstFrame} max={lastFrame} step="1" value={Math.min(lastFrame, Math.max(firstFrame, currentFrame))} disabled={!previewReady} onChange={(event) => seekFrame(Number(event.target.value))}/>
       <span className="frame-count">{Math.round(currentFrame)} / {Math.round(lastFrame)}</span>
     </div>
   </section>

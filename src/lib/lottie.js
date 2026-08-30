@@ -1,14 +1,149 @@
-import JSZip from 'jszip'
+import {
+  MAX_IMAGE_DIMENSION,
+  MAX_IMAGE_FILE_SIZE,
+  MAX_IMAGE_PIXELS,
+  SAFE_PLACEHOLDER_IMAGE,
+  imageBytesToDataUrl,
+  inspectImageBytes,
+  inspectImageDataUrl,
+  isImageFile,
+  isSafeImageDataUrl,
+  safeFileName,
+  safeImageSource,
+} from './images.js'
 
-const IMAGE_EXTENSION = /\.(png|jpe?g|webp|gif|svg)$/i
+export {
+  IMAGE_FILE_ACCEPT,
+  MAX_BATCH_FILES,
+  MAX_BATCH_TOTAL_SIZE,
+  MAX_IMAGE_DIMENSION,
+  MAX_IMAGE_FILE_SIZE,
+  MAX_IMAGE_PIXELS,
+  imageDataUrlToBlob as dataUrlToBlob,
+  isImageFile,
+  isSafeImageDataUrl,
+  prepareImageFile,
+  safeFileName,
+  safeImageSource,
+} from './images.js'
+
 export const MAX_LOTTIE_FILE_SIZE = 50 * 1024 * 1024
+export const MAX_ARCHIVE_UNCOMPRESSED_SIZE = 100 * 1024 * 1024
+export const MAX_ARCHIVE_ENTRIES = 2000
+export const MAX_COMPOSITION_DIMENSION = 16_384
+export const MAX_COMPOSITION_PIXELS = 67_108_864
+export const MAX_COMPOSITION_FRAMES = 1_000_000
+export const MAX_FRAME_RATE = 1000
+
+const MAX_JSON_DEPTH = 100
+const MAX_JSON_CONTAINERS = 1_000_000
+const MAX_LAYERS = 20_000
+const MAX_ASSETS = 20_000
+const FORBIDDEN_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+
+function sanitizeJsonTree(value, state = { containers: 0 }, depth = 0) {
+  if (depth > MAX_JSON_DEPTH) throw new Error(`Invalid Lottie: JSON nesting exceeds ${MAX_JSON_DEPTH} levels.`)
+  if (value == null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error('Invalid Lottie: numeric values must be finite.')
+    return value
+  }
+  if (typeof value !== 'object') throw new Error('Invalid Lottie: unsupported JSON value.')
+  state.containers += 1
+  if (state.containers > MAX_JSON_CONTAINERS) throw new Error('Invalid Lottie: the document contains too many objects.')
+  if (Array.isArray(value)) return value.map((item) => sanitizeJsonTree(item, state, depth + 1))
+  const result = {}
+  Object.entries(value).forEach(([key, item]) => {
+    if (!FORBIDDEN_OBJECT_KEYS.has(key)) result[key] = sanitizeJsonTree(item, state, depth + 1)
+  })
+  return result
+}
+
+const isScalarId = (value) => typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))
+const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : null
+
+function validateLayers(layers, state, label = 'layers') {
+  layers.forEach((layer, index) => {
+    if (!layer || typeof layer !== 'object' || Array.isArray(layer)) throw new Error(`Invalid Lottie: ${label}[${index}] must be an object.`)
+    state.layers += 1
+    if (state.layers > MAX_LAYERS) throw new Error(`Invalid Lottie: animations are limited to ${MAX_LAYERS.toLocaleString()} layers.`)
+    if (layer.nm != null && typeof layer.nm !== 'string') throw new Error(`Invalid Lottie: ${label}[${index}].nm must be text.`)
+    if (typeof layer.nm === 'string' && layer.nm.length > 10_000) throw new Error(`Invalid Lottie: ${label}[${index}].nm is too long.`)
+    ;['ind', 'parent', 'refId'].forEach((field) => {
+      if (layer[field] != null && !isScalarId(layer[field])) throw new Error(`Invalid Lottie: ${label}[${index}].${field} has an invalid value.`)
+    })
+    if (layer.ty != null) {
+      const type = finite(layer.ty)
+      if (type == null) throw new Error(`Invalid Lottie: ${label}[${index}].ty must be numeric.`)
+      layer.ty = type
+    }
+    if (layer.ks != null && (!layer.ks || typeof layer.ks !== 'object' || Array.isArray(layer.ks))) {
+      throw new Error(`Invalid Lottie: ${label}[${index}].ks must be an object.`)
+    }
+    ;['ip', 'op', 'st', 'sr'].forEach((field) => {
+      if (layer[field] == null) return
+      const value = finite(layer[field])
+      if (value == null || (field === 'sr' && value === 0)) throw new Error(`Invalid Lottie: ${label}[${index}].${field} must be numeric${field === 'sr' ? ' and non-zero' : ''}.`)
+      layer[field] = value
+    })
+  })
+}
 
 export function validateLottie(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('This JSON is not a Lottie animation.')
-  if (!Array.isArray(data.layers)) throw new Error("Invalid Lottie: 'layers' must be an array.")
-  if (data.assets != null && !Array.isArray(data.assets)) throw new Error("Invalid Lottie: 'assets' must be an array.")
-  if (!(Number(data.w) > 0) || !(Number(data.h) > 0)) throw new Error('Invalid Lottie: composition width and height are required.')
-  return { ...data, assets: data.assets || [] }
+  const cleaned = sanitizeJsonTree(data)
+  if (!Array.isArray(cleaned.layers)) throw new Error("Invalid Lottie: 'layers' must be an array.")
+  if (cleaned.assets != null && !Array.isArray(cleaned.assets)) throw new Error("Invalid Lottie: 'assets' must be an array.")
+  cleaned.assets ||= []
+
+  const width = finite(cleaned.w)
+  const height = finite(cleaned.h)
+  if (!(width > 0) || !(height > 0)) throw new Error('Invalid Lottie: composition width and height are required.')
+  if (width > MAX_COMPOSITION_DIMENSION || height > MAX_COMPOSITION_DIMENSION || width * height > MAX_COMPOSITION_PIXELS) {
+    throw new Error(`Invalid Lottie: the composition exceeds ${MAX_COMPOSITION_DIMENSION.toLocaleString()} px per side or ${Math.round(MAX_COMPOSITION_PIXELS / 1_000_000)} megapixels.`)
+  }
+  const fps = finite(cleaned.fr)
+  const firstFrame = finite(cleaned.ip)
+  const outPoint = finite(cleaned.op)
+  if (!(fps > 0) || fps > MAX_FRAME_RATE || firstFrame == null || outPoint == null || outPoint <= firstFrame) {
+    throw new Error(`Invalid Lottie: a frame rate from 0 to ${MAX_FRAME_RATE} fps and a valid in/out frame range are required.`)
+  }
+  if (outPoint - firstFrame > MAX_COMPOSITION_FRAMES) throw new Error(`Invalid Lottie: animations are limited to ${MAX_COMPOSITION_FRAMES.toLocaleString()} frames.`)
+  Object.assign(cleaned, { w: width, h: height, fr: fps, ip: firstFrame, op: outPoint })
+
+  const state = { layers: 0 }
+  validateLayers(cleaned.layers, state)
+  if (cleaned.assets.length > MAX_ASSETS) throw new Error(`Invalid Lottie: animations are limited to ${MAX_ASSETS.toLocaleString()} assets.`)
+  const assetIds = new Set()
+  cleaned.assets.forEach((asset, index) => {
+    if (!asset || typeof asset !== 'object' || Array.isArray(asset)) throw new Error(`Invalid Lottie: assets[${index}] must be an object.`)
+    if (!isScalarId(asset.id) || !String(asset.id).length || String(asset.id).length > 500) throw new Error(`Invalid Lottie: assets[${index}].id is required and must be at most 500 characters.`)
+    const id = String(asset.id)
+    if (assetIds.has(id)) throw new Error(`Invalid Lottie: duplicate asset id “${id.slice(0, 120)}”.`)
+    assetIds.add(id)
+    if (asset.p != null && typeof asset.p !== 'string') throw new Error(`Invalid Lottie: asset “${id.slice(0, 120)}” has an invalid image path.`)
+    if (asset.u != null && typeof asset.u !== 'string') throw new Error(`Invalid Lottie: asset “${id.slice(0, 120)}” has an invalid image directory.`)
+    if (typeof asset.p === 'string' && !asset.p.startsWith('data:') && asset.p.length > 4096) throw new Error(`Invalid Lottie: asset “${id.slice(0, 120)}” has an image path that is too long.`)
+    if (typeof asset.u === 'string' && asset.u.length > 2048) throw new Error(`Invalid Lottie: asset “${id.slice(0, 120)}” has an image directory that is too long.`)
+    if (Array.isArray(asset.layers)) validateLayers(asset.layers, state, `assets[${index}].layers`)
+    if (!Array.isArray(asset.layers) && asset.p) {
+      const assetWidth = asset.w == null ? null : finite(asset.w)
+      const assetHeight = asset.h == null ? null : finite(asset.h)
+      if ((asset.w != null && !(assetWidth > 0)) || (asset.h != null && !(assetHeight > 0))) {
+        throw new Error(`Invalid Lottie: asset “${id.slice(0, 120)}” has invalid dimensions.`)
+      }
+      if (assetWidth != null) asset.w = assetWidth
+      if (assetHeight != null) asset.h = assetHeight
+      if ((assetWidth && assetWidth > MAX_IMAGE_DIMENSION) || (assetHeight && assetHeight > MAX_IMAGE_DIMENSION) || (assetWidth && assetHeight && assetWidth * assetHeight > MAX_IMAGE_PIXELS)) {
+        throw new Error(`Invalid Lottie: asset “${id.slice(0, 120)}” exceeds the image dimension limit.`)
+      }
+      if (asset.p.startsWith('data:')) {
+        try { inspectImageDataUrl(asset.p) }
+        catch (error) { throw new Error(`Invalid Lottie asset “${id.slice(0, 120)}”: ${error.message}`) }
+      }
+    }
+  })
+  return cleaned
 }
 
 export function parseLottieJson(text) {
@@ -21,84 +156,160 @@ export function parseLottieJson(text) {
 
 export async function parseLottieFile(file) {
   if (!file) throw new Error('Choose a Lottie JSON or .lottie file.')
+  const name = String(file.name || '')
+  if (!/\.(json|lottie)$/i.test(name)) throw new Error('Choose a .json or .lottie file.')
+  if (!(Number(file.size) >= 0)) throw new Error('The selected file has an invalid size.')
   if (file.size > MAX_LOTTIE_FILE_SIZE) throw new Error('The selected file is larger than 50 MB.')
 
-  if (!String(file.name || '').toLowerCase().endsWith('.lottie')) {
+  if (!name.toLowerCase().endsWith('.lottie')) {
     return parseLottieJson(await file.text())
   }
 
   let zip
-  try { zip = await JSZip.loadAsync(await file.arrayBuffer()) }
+  try {
+    const { default: JSZip } = await import('jszip')
+    zip = await JSZip.loadAsync(await file.arrayBuffer())
+  }
   catch { throw new Error('The selected .lottie file is not a valid dotLottie archive.') }
 
-  const jsonEntries = Object.values(zip.files).filter((entry) => !entry.dir && /(^|\/)animations\/.*\.json$/i.test(entry.name))
+  const entries = Object.values(zip.files)
+  if (entries.length > MAX_ARCHIVE_ENTRIES) throw new Error(`The .lottie archive contains more than ${MAX_ARCHIVE_ENTRIES.toLocaleString()} entries.`)
+  let expandedSize = 0
+  const entriesByPath = new Map()
+  entries.forEach((entry) => {
+    const originalName = entry.unsafeOriginalName || entry.name
+    const normalized = normalizeArchivePath(originalName)
+    if (!normalized) throw new Error('The .lottie archive contains an unsafe file path.')
+    const size = Number(entry._data?.uncompressedSize ?? 0)
+    if (!Number.isFinite(size) || size < 0) throw new Error('The .lottie archive contains an invalid entry size.')
+    expandedSize += size
+    if (expandedSize > MAX_ARCHIVE_UNCOMPRESSED_SIZE) throw new Error('The .lottie archive expands beyond the 100 MB safety limit.')
+    if (!entry.dir) {
+      const key = normalized.toLowerCase()
+      if (entriesByPath.has(key)) throw new Error('The .lottie archive contains duplicate file paths.')
+      entriesByPath.set(key, entry)
+    }
+  })
+
+  const jsonEntries = [...entriesByPath.entries()].filter(([path]) => /(^|\/)animations\/[^/]+\.json$/i.test(path)).map(([, entry]) => entry)
   if (!jsonEntries.length) throw new Error('The .lottie archive does not contain an animation JSON file.')
+  jsonEntries.forEach((entry) => {
+    if (Number(entry._data?.uncompressedSize ?? 0) > MAX_LOTTIE_FILE_SIZE) throw new Error('An animation JSON inside the archive is larger than 50 MB.')
+  })
 
   let preferredId = ''
-  const manifestEntry = zip.file('manifest.json')
+  const manifestEntry = entriesByPath.get('manifest.json')
   if (manifestEntry) {
     try {
+      if (Number(manifestEntry._data?.uncompressedSize ?? 0) > 1024 * 1024) throw new Error('Manifest is too large.')
       const manifest = JSON.parse(await manifestEntry.async('string'))
-      preferredId = manifest.initial?.animation || manifest.activeAnimationId || manifest.animations?.[0]?.id || ''
+      const candidate = manifest.initial?.animation || manifest.activeAnimationId || manifest.animations?.[0]?.id
+      if (typeof candidate === 'string' && /^[a-z0-9._-]{1,200}$/i.test(candidate)) preferredId = candidate
     } catch { /* Fall back to the first animation. */ }
   }
-  const preferred = jsonEntries.find((entry) => entry.name.toLowerCase().endsWith(`animations/${preferredId.toLowerCase()}.json`))
+  const preferred = preferredId ? entriesByPath.get(`animations/${preferredId}.json`.toLowerCase()) : null
   const data = parseLottieJson(await (preferred || jsonEntries[0]).async('string'))
 
-  await Promise.all(imageAssets(data).map(async (asset) => {
-    if (/^data:image\//i.test(String(asset.p))) return
-    const relativePath = `${asset.u || ''}${asset.p || ''}`.replace(/^\.\//, '').replace(/^\//, '')
-    const entry = zip.file(relativePath) || zip.file(`images/${String(asset.p || '').replace(/^\//, '')}`)
-    if (!entry) return
-    const extension = extensionForAsset(asset)
-    const mime = extension === 'svg' ? 'image/svg+xml'
-      : extension === 'jpg' ? 'image/jpeg'
-        : `image/${extension}`
-    asset.p = `data:${mime};base64,${await entry.async('base64')}`
+  for (const asset of imageAssets(data)) {
+    if (String(asset.p).startsWith('data:')) continue
+    const relativePath = normalizeArchivePath(`${asset.u || ''}${asset.p || ''}`)
+    const fallbackPath = normalizeArchivePath(`images/${String(asset.p || '').replace(/^\/+/, '')}`)
+    const entry = (relativePath && entriesByPath.get(relativePath.toLowerCase())) || (fallbackPath && entriesByPath.get(fallbackPath.toLowerCase()))
+    if (!entry) continue
+    if (Number(entry._data?.uncompressedSize ?? 0) > MAX_IMAGE_FILE_SIZE) throw new Error(`Archive image “${safeFileName(asset.p, 'image')}” is larger than 10 MB.`)
+    const bytes = await entry.async('uint8array')
+    let info
+    try { info = inspectImageBytes(bytes) }
+    catch (error) { throw new Error(`Archive image “${safeFileName(asset.p, 'image')}”: ${error.message}`) }
+    asset.p = imageBytesToDataUrl(bytes, info)
     asset.u = ''
     asset.e = 1
-  }))
-  return data
+  }
+  return validateLottie(data)
+}
+
+function normalizeArchivePath(value) {
+  const path = String(value || '').replace(/\\/g, '/')
+  if (!path || path.includes('\0') || path.startsWith('/')) return null
+  const segments = path.split('/')
+  if (segments.some((segment) => segment === '..')) return null
+  return segments.filter((segment) => segment && segment !== '.').join('/') || null
 }
 
 export const imageAssets = (data) => (data?.assets || []).filter((asset) => asset && !Array.isArray(asset.layers) && asset.p)
-export const embeddedImageAssets = (data) => imageAssets(data).filter((asset) => /^data:image\//i.test(String(asset.p)))
+export const embeddedImageAssets = (data) => imageAssets(data).filter((asset) => isSafeImageDataUrl(asset.p))
 
 export function fontReferences(data) {
   const fonts = Array.isArray(data?.fonts?.list) ? data.fonts.list : []
-  return fonts.map((font, index) => ({
-    id: font.fName || font.fFamily || `font-${index + 1}`,
-    family: font.fFamily || font.fName || 'Unknown family',
-    style: font.fStyle || 'Regular',
-    path: font.fPath || '',
+  const text = (value, fallback) => (typeof value === 'string' || typeof value === 'number') ? String(value).slice(0, 500) : fallback
+  return fonts.filter((font) => font && typeof font === 'object' && !Array.isArray(font)).map((font, index) => ({
+    id: text(font.fName, text(font.fFamily, `font-${index + 1}`)),
+    family: text(font.fFamily, text(font.fName, 'Unknown family')),
+    style: text(font.fStyle, 'Regular'),
+    path: text(font.fPath, ''),
   }))
 }
-export const isImageFile = (file) => Boolean(file) && (file.type?.startsWith('image/') || IMAGE_EXTENSION.test(file.name || ''))
-
 export function refsByAsset(data) {
-  const refs = {}
+  const refs = new Map()
   const collect = (layers = []) => layers.forEach((layer) => {
     if (!layer.refId) return
-    const names = refs[layer.refId] ||= new Set()
-    names.add(layer.nm || 'Unnamed layer')
+    const id = String(layer.refId)
+    const names = refs.get(id) || new Set()
+    names.add(typeof layer.nm === 'string' ? layer.nm : 'Unnamed layer')
+    refs.set(id, names)
   })
   collect(data?.layers)
   data?.assets?.forEach((asset) => Array.isArray(asset.layers) && collect(asset.layers))
-  return Object.fromEntries(Object.entries(refs).map(([id, names]) => [id, [...names]]))
+  return Object.fromEntries([...refs].map(([id, names]) => [id, [...names]]))
 }
 
 export function extensionForAsset(asset) {
-  const match = String(asset.p || '').match(/^data:image\/([a-z0-9.+-]+)/i)
-  if (match) return match[1].replace('jpeg', 'jpg').split('+')[0]
-  return String(asset.p || '').split(/[?#]/)[0].split('.').pop()?.toLowerCase() || 'png'
+  const match = String(asset.p || '').match(/^data:image\/(png|jpe?g|pjpeg|webp|gif);base64,/i)
+  if (match) return match[1].replace(/jpeg|pjpeg/i, 'jpg').toLowerCase()
+  const extension = String(asset.p || '').split(/[?#]/)[0].split('.').pop()?.toLowerCase()
+  return ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(extension) ? extension.replace('jpeg', 'jpg') : 'png'
 }
 
 export function expectedFilename(asset) {
-  if (!String(asset.p).startsWith('data:image')) return String(asset.p).split(/[\\/]/).pop().split(/[?#]/)[0]
-  return `${asset.id || 'image'}_${asset.w || 'x'}x${asset.h || 'x'}.${extensionForAsset(asset)}`
+  const fallback = `${safeFileName(asset.id || 'image', 'image')}.${extensionForAsset(asset)}`
+  if (!String(asset.p).startsWith('data:')) return safeFileName(String(asset.p).split(/[?#]/)[0], fallback)
+  return safeFileName(`${asset.id || 'image'}_${asset.w || 'x'}x${asset.h || 'x'}.${extensionForAsset(asset)}`, fallback)
 }
 
-export const assetSource = (asset) => String(asset?.p || '').startsWith('data:') ? asset.p : `${asset?.u || ''}${asset?.p || ''}`
+export const assetSource = (asset) => safeImageSource(asset?.p)
+
+export function lottieForPreview(data) {
+  const result = structuredClone(data)
+  result.assets?.forEach((asset) => {
+    if (Array.isArray(asset?.layers) || !asset?.p) return
+    if (isSafeImageDataUrl(asset.p)) {
+      asset.u = ''
+      asset.e = 1
+      return
+    }
+    asset.p = SAFE_PLACEHOLDER_IMAGE
+    asset.u = ''
+    asset.e = 1
+  })
+  if (Array.isArray(result.fonts?.list)) result.fonts.list.forEach((font) => { if (font && typeof font === 'object') font.fPath = '' })
+  return result
+}
+
+export function compositionFrameBounds(data) {
+  const first = Number(data?.ip)
+  const outPoint = Number(data?.op)
+  const start = Number.isFinite(first) ? first : 0
+  const exclusiveEnd = Number.isFinite(outPoint) && outPoint > start ? outPoint : start + 1
+  return { start, end: Math.max(start, Math.ceil(exclusiveEnd) - 1), exclusiveEnd }
+}
+
+export function clampCompositionFrame(data, frame, snap = false) {
+  const { start, end } = compositionFrameBounds(data)
+  const candidate = Number(frame)
+  const finiteFrame = Number.isFinite(candidate) ? candidate : start
+  const normalized = snap ? start + Math.round(finiteFrame - start) : finiteFrame
+  return Math.max(start, Math.min(end, normalized))
+}
 
 export const TRANSFORM_TRACKS = [
   { key: 'a', label: 'Anchor point', dimensions: ['X', 'Y'], fallback: [0, 0, 0] },
@@ -108,10 +319,11 @@ export const TRANSFORM_TRACKS = [
   { key: 'o', label: 'Opacity', dimensions: ['%'], fallback: 100 },
 ]
 
-const cloneValue = (value) => Array.isArray(value) ? [...value] : Number(value) || 0
+const finiteNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback
+const cloneValue = (value) => Array.isArray(value) ? value.map((item) => finiteNumber(item)) : finiteNumber(value)
 const normalizeValue = (value, fallback) => {
   if (value == null) return cloneValue(fallback)
-  if (!Array.isArray(fallback) && Array.isArray(value)) return Number(value[0]) || 0
+  if (!Array.isArray(fallback) && Array.isArray(value)) return finiteNumber(value[0])
   return cloneValue(value)
 }
 
@@ -126,7 +338,11 @@ export function propertyKeyframes(property) {
     return [...frames].sort((a, b) => a - b).map((t) => ({ t }))
   }
   if (!property || property.a !== 1 || !Array.isArray(property.k)) return []
-  return property.k.filter((keyframe) => keyframe && Number.isFinite(Number(keyframe.t)))
+  const frames = new Map()
+  property.k.forEach((keyframe) => {
+    if (keyframe && Number.isFinite(Number(keyframe.t))) frames.set(Number(keyframe.t), keyframe)
+  })
+  return [...frames.entries()].sort(([a], [b]) => a - b).map(([, keyframe]) => keyframe)
 }
 
 const cubic = (start, control1, control2, end, amount) => {
@@ -197,16 +413,19 @@ export function propertyValueAtFrame(property, frame, fallback = 0) {
   if (property.a !== 1 || !Array.isArray(property.k)) return normalizeValue(property.k, fallback)
   const keyframes = propertyKeyframes(property)
   if (!keyframes.length) return cloneValue(fallback)
-  const target = Number(frame) || 0
-  let current = keyframes[0]
-  let next = null
+  const candidate = Number(frame)
+  const target = Number.isFinite(candidate) ? candidate : 0
+  let currentIndex = 0
+  let nextIndex = -1
   for (let index = 0; index < keyframes.length; index += 1) {
-    if (Number(keyframes[index].t) <= target) current = keyframes[index]
-    if (Number(keyframes[index].t) > target) { next = keyframes[index]; break }
+    if (Number(keyframes[index].t) <= target) currentIndex = index
+    if (Number(keyframes[index].t) > target) { nextIndex = index; break }
   }
-  const start = normalizeValue(current.s, fallback)
-  if (!next || current.h === 1 || Number(next.t) === Number(current.t)) return start
-  const end = normalizeValue(next.s ?? current.e, start)
+  const current = keyframes[currentIndex]
+  const next = nextIndex >= 0 ? keyframes[nextIndex] : null
+  const start = normalizeValue(keyframeStartValue(keyframes, currentIndex, fallback), fallback)
+  if (!next || Number(current.h) === 1 || Number(next.t) === Number(current.t)) return start
+  const end = normalizeValue(next.s ?? current.e ?? keyframeStartValue(keyframes, nextIndex, start), start)
   const progress = Math.max(0, Math.min(1, (target - Number(current.t)) / (Number(next.t) - Number(current.t))))
   if (Array.isArray(start)) {
     const temporal = easedProgress(current, progress)
@@ -217,6 +436,17 @@ export function propertyValueAtFrame(property, frame, fallback = 0) {
     })
   }
   return start + (end - start) * easedProgress(current, progress)
+}
+
+function keyframeStartValue(keyframes, index, fallback) {
+  const current = keyframes[index]
+  if (current?.s != null) return current.s
+  for (let previousIndex = index - 1; previousIndex >= 0; previousIndex -= 1) {
+    const previous = keyframes[previousIndex]
+    if (previous?.e != null) return previous.e
+    if (previous?.s != null) return previous.s
+  }
+  return fallback
 }
 
 function newKeyframe(frame, value, template) {
@@ -243,8 +473,10 @@ function setTransformPropertyValue(property, frame, value, fallback, createKeyfr
     return
   }
 
-  const targetFrame = Number(frame) || 0
-  let keyframes = propertyKeyframes(property).map((keyframe) => ({ ...keyframe, s: keyframeValue(keyframe.s) }))
+  const frameNumber = Number(frame)
+  const targetFrame = Number.isFinite(frameNumber) ? frameNumber : initialFrame
+  const sourceKeyframes = propertyKeyframes(property)
+  let keyframes = sourceKeyframes.map((keyframe, index) => ({ ...keyframe, s: keyframeValue(keyframeStartValue(sourceKeyframes, index, fallback)) }))
   if (!keyframes.length) {
     const initialValue = propertyValueAtFrame(property, initialFrame, fallback)
     if (initialFrame !== targetFrame) keyframes.push(newKeyframe(initialFrame, initialValue))
@@ -264,13 +496,13 @@ function setTransformPropertyValue(property, frame, value, fallback, createKeyfr
   property.k = keyframes
 }
 
-export function setLayerTransformValue(data, layerIndex, track, frame, value, createKeyframe = false) {
-  const result = structuredClone(data)
+function applyLayerTransformValue(result, layerIndex, track, frame, value, createKeyframe = false) {
   const layer = result.layers?.[layerIndex]
   if (!layer) return result
-  layer.ks ||= {}
   const definition = TRANSFORM_TRACKS.find((item) => item.key === track)
-  const fallback = definition?.fallback ?? 0
+  if (!definition) return result
+  layer.ks ||= {}
+  const fallback = definition.fallback
   const property = layer.ks[track] ||= { a: 0, k: cloneValue(fallback) }
   const normalized = normalizeValue(value, fallback)
   const initialFrame = Number(result.ip) || 0
@@ -288,11 +520,26 @@ export function setLayerTransformValue(data, layerIndex, track, frame, value, cr
   return result
 }
 
+export function setLayerTransformValue(data, layerIndex, track, frame, value, createKeyframe = false) {
+  return applyLayerTransformValue(structuredClone(data), layerIndex, track, frame, value, createKeyframe)
+}
+
+export function setLayerTransformValues(data, edits) {
+  const result = structuredClone(data)
+  if (!Array.isArray(edits)) return result
+  edits.forEach((edit) => {
+    if (!edit || typeof edit !== 'object') return
+    applyLayerTransformValue(result, edit.layerIndex, edit.track, edit.frame, edit.value, Boolean(edit.createKeyframe))
+  })
+  return result
+}
+
 export function mergedLottie(source, replacements) {
   const result = structuredClone(source)
   result.assets?.forEach((asset) => {
-    const replacement = replacements[asset.id]
-    if (replacement) Object.assign(asset, { p: replacement.dataUrl, u: '', e: 1 })
+    const id = String(asset.id)
+    const replacement = replacements && Object.hasOwn(replacements, id) ? replacements[id] : null
+    if (replacement && isSafeImageDataUrl(replacement.dataUrl)) Object.assign(asset, { p: replacement.dataUrl, u: '', e: 1 })
   })
   return result
 }
@@ -316,29 +563,9 @@ export function matchAssetFiles(assets, files) {
   return { matches, imageCount: available.length }
 }
 
-export function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = () => reject(new Error(`Could not read ${file.name}`))
-    reader.onabort = () => reject(new Error(`Reading ${file.name} was cancelled.`))
-    reader.readAsDataURL(file)
-  })
-}
-
-export function dataUrlToBlob(dataUrl) {
-  const comma = String(dataUrl).indexOf(',')
-  if (comma < 0) throw new Error('An embedded asset contains an invalid data URL.')
-  const header = dataUrl.slice(0, comma)
-  const body = dataUrl.slice(comma + 1)
-  const mime = header.match(/^data:([^;,]+)/)?.[1] || 'application/octet-stream'
-  if (!header.includes(';base64')) return new Blob([decodeURIComponent(body)], { type: mime })
-  const binary = atob(body.replace(/\s/g, ''))
-  return new Blob([Uint8Array.from(binary, (char) => char.charCodeAt(0))], { type: mime })
-}
-
 export function safeBaseName(name, fallback = 'animation') {
-  return String(name || fallback).replace(/\.(json|lottie)$/i, '').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback
+  const sanitized = safeFileName(name, fallback).replace(/\.(json|lottie)$/i, '').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '')
+  return (sanitized || fallback).slice(0, 80)
 }
 
 export function formatBytes(bytes = 0) {

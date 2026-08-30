@@ -66,7 +66,7 @@ export default function Editor() {
       <div className="file-identity"><span className="file-icon"><FileJson size={20} aria-hidden="true"/></span><div><p title={sourceName}>{sourceName}</p><span>{source.w} × {source.h} · {stats.fps || '?'} fps · {stats.duration.toFixed(1)} sec</span></div></div>
       <div className="summary-stats"><span><strong>{stats.assets}</strong> assets</span><span><strong>{stats.changes}</strong> changes</span></div>
       <Button className={timelineOpen ? 'is-active' : ''} icon={timelineOpen ? PanelBottomClose : PanelBottomOpen} onClick={() => setTimelineOpen((open) => !open)} aria-expanded={timelineOpen} aria-pressed={timelineOpen}>{timelineOpen ? 'Close timeline' : 'Open timeline'}</Button>
-      {!timelineOpen && <FilePicker icon={Upload} accept=".json,.lottie,application/json,application/zip" onFiles={openAnother}>Open another</FilePicker>}
+      {!timelineOpen && <FilePicker icon={Upload} accept=".json,.lottie,application/json,application/zip" confirm={{ title: 'Open another file?', message: `Replace ${sourceName} and discard unexported changes?`, tone: 'danger' }} onFiles={openAnother}>Open another</FilePicker>}
     </div>
     <div className={`editor-grid ${timelineOpen ? 'has-timeline' : ''}`}><LayersPanel/><Preview/></div>
     {timelineOpen && <TimelineEditor/>}

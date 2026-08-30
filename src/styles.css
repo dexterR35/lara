@@ -139,6 +139,10 @@
     background-color: var(--color-warning);
   }
 
+  .session-saving span {
+    @apply animate-pulse;
+  }
+
   .icon-link {
     @apply grid h-9 w-9 place-items-center rounded-lg transition;
     color: var(--color-muted);
@@ -151,6 +155,11 @@
 
   .app-main {
     @apply mx-auto flex min-h-0 w-full max-w-[1921px] flex-1 flex-col overflow-hidden px-4 py-3 md:px-7;
+  }
+
+  .route-loading {
+    @apply grid min-h-0 flex-1 place-items-center text-sm;
+    color: var(--color-muted);
   }
 
   .button {

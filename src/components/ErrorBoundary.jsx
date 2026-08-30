@@ -16,7 +16,10 @@ export default class ErrorBoundary extends Component {
 
   reset = () => {
     if (!window.confirm('Clear the Lara workspace and reload?')) return
-    sessionStorage.removeItem('lara.workspace.v2')
+    try {
+      sessionStorage.removeItem('lara.workspace.v2')
+      sessionStorage.removeItem('lara.workspace.v3')
+    } catch { /* Reload even if browser storage is unavailable. */ }
     window.location.reload()
   }
 

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { FileJson, FolderOpen, UploadCloud } from 'lucide-react'
+import { FolderOpen, UploadCloud } from 'lucide-react'
 import { MAX_LOTTIE_FILE_SIZE } from '../lib/lottie'
 import Button from './Button'
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Diamond, Image, Layers3, MousePointer2, Type } from 'lucide-react'
-import { TRANSFORM_TRACKS, propertyKeyframes, propertyValueAtFrame } from '../lib/lottie'
+import { TRANSFORM_TRACKS, compositionFrameBounds, propertyKeyframes, propertyValueAtFrame } from '../lib/lottie'
 import { useWorkspace } from '../state/WorkspaceContext'
 
 const layerIcon = (type) => type === 2 ? Image : type === 5 ? Type : Layers3
@@ -25,10 +25,10 @@ function rangeOptions(key, dimensionIndex, value, width, height) {
 function KeyframeMarkers({ keyframes, start, end, currentFrame, onSeek }) {
   const duration = Math.max(1, end - start)
   return <div className="keyframe-track">
-    {keyframes.map((keyframe) => {
+    {keyframes.map((keyframe, index) => {
       const frame = Number(keyframe.t)
       const left = Math.max(0, Math.min(100, ((frame - start) / duration) * 100))
-      return <button key={frame} type="button" className={`keyframe-marker ${Math.round(currentFrame) === Math.round(frame) ? 'is-current' : ''}`} style={{ left: `${left}%` }} onClick={() => onSeek(frame)} aria-label={`Go to keyframe ${frame}`} title={`Frame ${frame}`}><Diamond size={10} fill="currentColor"/></button>
+      return <button key={`${frame}-${index}`} type="button" className={`keyframe-marker ${Math.abs(currentFrame - frame) < .001 ? 'is-current' : ''}`} style={{ left: `${left}%` }} onClick={() => onSeek(frame)} aria-label={`Go to keyframe ${frame}`} title={`Frame ${frame}`}><Diamond size={10} fill="currentColor"/></button>
     })}
   </div>
 }
@@ -38,7 +38,7 @@ function TrackRow({ definition, property, layerIndex, frame, start, end, width, 
   const rawValue = propertyValueAtFrame(property, frame, fallback)
   const values = Array.isArray(rawValue) ? rawValue : [rawValue]
   const keyframes = propertyKeyframes(property)
-  const hasKeyframe = keyframes.some((keyframe) => Math.round(Number(keyframe.t)) === Math.round(frame))
+  const hasKeyframe = keyframes.some((keyframe) => Math.abs(Number(keyframe.t) - frame) < .001)
 
   const changeDimension = (dimension, nextValue) => {
     const value = Array.isArray(rawValue) ? [...rawValue] : Number(rawValue) || 0
@@ -77,6 +77,11 @@ function TrackRow({ definition, property, layerIndex, frame, start, end, width, 
 
 function LayerRow({ layer, index, selected, hovered, expanded, onSelect, onHover, onLeave, onToggle, frame, start, end, width, height, setLayerTransform, seekFrame }) {
   const Icon = layerIcon(layer.ty)
+  const duration = Math.max(1, end - start)
+  const rawLayerStart = Number(layer.ip)
+  const rawLayerEnd = Number(layer.op)
+  const layerStart = Math.max(start, Math.min(end, Number.isFinite(rawLayerStart) ? rawLayerStart : start))
+  const layerEnd = Math.max(layerStart, Math.min(end, Math.ceil(Number.isFinite(rawLayerEnd) ? rawLayerEnd : end + 1) - 1))
   const allKeyframes = useMemo(() => {
     const frames = new Set()
     TRANSFORM_TRACKS.forEach(({ key }) => propertyKeyframes(layer.ks?.[key]).forEach(({ t }) => frames.add(Number(t))))
@@ -90,7 +95,7 @@ function LayerRow({ layer, index, selected, hovered, expanded, onSelect, onHover
         <Icon size={14}/><span title={layer.nm || `Layer ${index + 1}`}>{layer.nm || `Layer ${index + 1}`}</span>
       </div>
       <div className="layer-time-track">
-        <span className="layer-duration" style={{ left: `${Math.max(0, ((Number(layer.ip ?? start) - start) / Math.max(1, end - start)) * 100)}%`, right: `${Math.max(0, ((end - Number(layer.op ?? end)) / Math.max(1, end - start)) * 100)}%` }}/>
+        <span className="layer-duration" style={{ left: `${Math.max(0, ((layerStart - start) / duration) * 100)}%`, right: `${Math.max(0, ((end - layerEnd) / duration) * 100)}%` }}/>
         <KeyframeMarkers keyframes={allKeyframes} start={start} end={end} currentFrame={frame} onSeek={seekFrame}/>
       </div>
     </div>
@@ -101,8 +106,7 @@ function LayerRow({ layer, index, selected, hovered, expanded, onSelect, onHover
 export default function TimelineEditor() {
   const { source, selectedLayerIndices, selectLayer, hoveredLayerIndex, setHoveredLayerIndex, currentFrame, seekFrame, setLayerTransform } = useWorkspace()
   const [expanded, setExpanded] = useState(() => new Set())
-  const start = Number(source.ip) || 0
-  const end = Number(source.op) || 1
+  const { start, end } = compositionFrameBounds(source)
   const fps = Number(source.fr) || 1
   const width = Math.max(Number(source.w) || 1, 1)
   const height = Math.max(Number(source.h) || 1, 1)
@@ -120,18 +124,18 @@ export default function TimelineEditor() {
     <div className="timeline-toolbar">
       <div><p className="eyebrow">Animation</p><h2>Timeline</h2></div>
       <span className="timeline-tip"><MousePointer2 size={13}/> Select a layer, expand transforms, then add a diamond at the playhead</span>
-      <output>{(currentFrame / fps).toFixed(2)}s <small>· frame {Math.round(currentFrame)}</small></output>
+      <output>{((currentFrame - start) / fps).toFixed(2)}s <small>· frame {Math.round(currentFrame)}</small></output>
     </div>
     <div className="timeline-scroll">
       <div className="timeline-ruler-row">
         <strong>Layers</strong>
         <div className="timeline-ruler">
-          {ticks.map((tick) => <span key={tick} style={{ left: `${((tick - start) / Math.max(1, end - start)) * 100}%` }}>{Math.round(tick)}</span>)}
+          {ticks.map((tick, index) => <span key={index} style={{ left: `${((tick - start) / Math.max(1, end - start)) * 100}%` }}>{Math.round(tick)}</span>)}
           <input type="range" min={start} max={end} step="1" value={Math.min(end, Math.max(start, currentFrame))} onChange={(event) => seekFrame(Number(event.target.value))} aria-label="Timeline playhead"/>
           <i className="timeline-playhead" style={{ left: `${((currentFrame - start) / Math.max(1, end - start)) * 100}%` }}/>
         </div>
       </div>
-      {layers.map((layer, index) => <LayerRow key={`${layer.ind ?? index}-${layer.nm ?? ''}`} layer={layer} index={index} selected={selectedLayerIndices.includes(index)} hovered={hoveredLayerIndex === index} expanded={expanded.has(index)} onHover={() => setHoveredLayerIndex(index)} onLeave={() => setHoveredLayerIndex((current) => current === index ? null : current)} onSelect={(event) => selectLayer(index, event.metaKey || event.ctrlKey || event.shiftKey)} onToggle={() => toggleLayer(index)} frame={currentFrame} start={start} end={end} width={width} height={height} setLayerTransform={setLayerTransform} seekFrame={seekFrame}/>)}
+      {layers.map((layer, index) => <LayerRow key={`${index}-${layer.ind ?? ''}-${layer.nm ?? ''}`} layer={layer} index={index} selected={selectedLayerIndices.includes(index)} hovered={hoveredLayerIndex === index} expanded={expanded.has(index)} onHover={() => setHoveredLayerIndex(index)} onLeave={() => setHoveredLayerIndex((current) => current === index ? null : current)} onSelect={(event) => selectLayer(index, event.metaKey || event.ctrlKey || event.shiftKey)} onToggle={() => toggleLayer(index)} frame={currentFrame} start={start} end={end} width={width} height={height} setLayerTransform={setLayerTransform} seekFrame={seekFrame}/>)}
       {!layers.length && <div className="timeline-empty">This composition has no editable layers.</div>}
     </div>
   </section>

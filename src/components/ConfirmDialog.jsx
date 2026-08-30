@@ -7,10 +7,12 @@ export default function ConfirmDialog({ title, message, confirmLabel = 'Yes', ca
   useEffect(() => {
     cancelRef.current?.focus()
     const onKey = (event) => {
-      if (event.key === 'Escape') onCancel()
-      else if (event.key === 'Enter') onConfirm()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCancel()
+      }
     }
-    // Defer so Enter from a just-closed file picker does not auto-confirm.
+    // Defer so the key event that opened the dialog cannot immediately close it.
     const timer = window.setTimeout(() => window.addEventListener('keydown', onKey), 0)
     return () => {
       window.clearTimeout(timer)
