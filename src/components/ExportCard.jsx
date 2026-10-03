@@ -76,7 +76,7 @@ export default function ExportCard() {
         if (!payload) return
         const filename = uniqueFilename(replacement?.name || expectedFilename(asset), usedNames, `${safeFileName(id, 'image')}.png`)
         folder.file(filename, dataUrlToBlob(payload), { compression: 'STORE' })
-        manifest.push({ id, file: filename, width: asset.w, height: asset.h, edited: Boolean(replacement) })
+        manifest.push({ id, file: filename, width: replacement?.width ?? asset.w, height: replacement?.height ?? asset.h, slotWidth: asset.w, slotHeight: asset.h, edited: Boolean(replacement) })
       })
       folder.file('manifest.json', JSON.stringify({ source: sourceName, generatedAt: new Date().toISOString(), images: manifest, fonts }, null, 2))
       download(await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }), `${base}-assets.zip`)

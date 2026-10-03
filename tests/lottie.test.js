@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import JSZip from 'jszip'
 import {
+  aspectRatioMismatch,
   clampCompositionFrame,
   compositionFrameBounds,
   dataUrlToBlob,
@@ -253,4 +254,23 @@ test('treats replacements for external images as embedded export assets', () => 
 
   assert.equal(embeddedImageAssets(source).length, 0)
   assert.equal(embeddedImageAssets(merged).length, 1)
+})
+
+test('keeps keyframes that share a time when another keyframe is edited', () => {
+  const data = { ...minimal, layers: [{ ty: 2, ks: { o: { a: 1, k: [
+    { t: 0, s: [0] },
+    { t: 10, s: [20] },
+    { t: 10, s: [25] },
+    { t: 20, s: [100] },
+  ] } } }] }
+  const edited = setLayerTransformValue(data, 0, 'o', 20, 50, true)
+  assert.deepEqual(edited.layers[0].ks.o.k.map(({ t, s }) => [t, s[0]]), [[0, 0], [10, 20], [10, 25], [20, 50]])
+  const atTen = setLayerTransformValue(data, 0, 'o', 10, 40, true)
+  assert.deepEqual(atTen.layers[0].ks.o.k.map(({ t, s }) => [t, s[0]]), [[0, 0], [10, 20], [10, 40], [20, 100]])
+})
+
+test('detects replacement images whose aspect ratio differs from the asset slot', () => {
+  assert.equal(aspectRatioMismatch({ w: 400, h: 200 }, { width: 800, height: 400 }), false)
+  assert.equal(aspectRatioMismatch({ w: 400, h: 200 }, { width: 512, height: 512 }), true)
+  assert.equal(aspectRatioMismatch({}, { width: 512, height: 512 }), false)
 })

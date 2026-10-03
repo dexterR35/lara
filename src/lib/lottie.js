@@ -475,13 +475,17 @@ function setTransformPropertyValue(property, frame, value, fallback, createKeyfr
 
   const frameNumber = Number(frame)
   const targetFrame = Number.isFinite(frameNumber) ? frameNumber : initialFrame
-  const sourceKeyframes = propertyKeyframes(property)
+  // Keep keyframes that share a time (stable sort) so an edit never drops source data.
+  const sourceKeyframes = property.a === 1 && Array.isArray(property.k)
+    ? property.k.filter((keyframe) => keyframe && Number.isFinite(Number(keyframe.t))).sort((a, b) => Number(a.t) - Number(b.t))
+    : []
   let keyframes = sourceKeyframes.map((keyframe, index) => ({ ...keyframe, s: keyframeValue(keyframeStartValue(sourceKeyframes, index, fallback)) }))
   if (!keyframes.length) {
     const initialValue = propertyValueAtFrame(property, initialFrame, fallback)
     if (initialFrame !== targetFrame) keyframes.push(newKeyframe(initialFrame, initialValue))
   }
-  const existing = keyframes.find((keyframe) => Number(keyframe.t) === targetFrame)
+  // The last keyframe at a time is the one that takes effect, matching propertyKeyframes.
+  const existing = keyframes.findLast((keyframe) => Number(keyframe.t) === targetFrame)
   if (existing) existing.s = keyframeValue(normalized)
   else {
     const template = keyframes.find((keyframe) => Number(keyframe.t) > targetFrame) || keyframes.at(-1)
@@ -542,6 +546,14 @@ export function mergedLottie(source, replacements) {
     if (replacement && isSafeImageDataUrl(replacement.dataUrl)) Object.assign(asset, { p: replacement.dataUrl, u: '', e: 1 })
   })
   return result
+}
+
+// Lottie draws images at the asset's w × h with "slice", so a different aspect ratio is center-cropped.
+export function aspectRatioMismatch(asset, image, tolerance = 0.01) {
+  const sizes = [asset?.w, asset?.h, image?.width, image?.height].map(Number)
+  if (!sizes.every((size) => size > 0)) return false
+  const [width, height, imageWidth, imageHeight] = sizes
+  return Math.abs(Math.log((width / height) / (imageWidth / imageHeight))) > tolerance
 }
 
 export function matchAssetFiles(assets, files) {

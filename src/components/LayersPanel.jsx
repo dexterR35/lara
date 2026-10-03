@@ -30,8 +30,9 @@ export default function LayersPanel() {
   const choose = async (file) => {
     if (!selectedAsset || !file) return
     try {
-      await replaceAsset(selectedAsset.id, file)
-      notify(`${selectedAsset.id} replaced`, 'success')
+      const { croppedFrom } = await replaceAsset(selectedAsset.id, file)
+      if (croppedFrom) notify(`${selectedAsset.id} replaced · ${croppedFrom} differs from the ${selectedAsset.w}×${selectedAsset.h} slot and will be cropped`)
+      else notify(`${selectedAsset.id} replaced`, 'success')
     } catch (error) { notify(error.message, 'error') }
   }
 

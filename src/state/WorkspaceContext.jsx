@@ -3,6 +3,7 @@ import { inspectImageDataUrl } from '../lib/images'
 import {
   MAX_BATCH_FILES,
   MAX_BATCH_TOTAL_SIZE,
+  aspectRatioMismatch,
   clampCompositionFrame,
   imageAssets,
   isImageFile,
@@ -168,9 +169,11 @@ export function WorkspaceProvider({ children }) {
 
   const replaceAsset = useCallback(async (assetId, file) => {
     const id = String(assetId)
-    if (!source || !imageAssets(source).some((asset) => String(asset.id) === id)) throw new Error('The selected image asset no longer exists.')
+    const asset = source && imageAssets(source).find((candidate) => String(candidate.id) === id)
+    if (!asset) throw new Error('The selected image asset no longer exists.')
     const replacement = await prepareImageFile(file)
     setReplacements((current) => ({ ...current, [id]: replacement }))
+    return { croppedFrom: aspectRatioMismatch(asset, replacement) ? `${replacement.width}×${replacement.height}` : null }
   }, [source])
 
   const applyBatch = useCallback(async (files) => {
@@ -184,13 +187,19 @@ export function WorkspaceProvider({ children }) {
     const { matches, imageCount } = matchAssetFiles(imageAssets(source), candidates)
     const entries = []
     let rejected = 0
+    let cropped = 0
     for (const [asset, file] of matches) {
-      try { entries.push([String(asset.id), await prepareImageFile(file)]) }
+      try {
+        const replacement = await prepareImageFile(file)
+        if (aspectRatioMismatch(asset, replacement)) cropped += 1
+        entries.push([String(asset.id), replacement])
+      }
       catch { rejected += 1 }
     }
     if (entries.length) setReplacements((current) => ({ ...current, ...Object.fromEntries(entries) }))
     const notes = []
     if (rejected) notes.push(`${rejected} unsafe or invalid ${rejected === 1 ? 'file' : 'files'} skipped`)
+    if (cropped) notes.push(`${cropped} with a different aspect ratio will be cropped`)
     if (unsupportedImages) notes.push(`${unsupportedImages} unsupported image ${unsupportedImages === 1 ? 'format' : 'formats'} ignored`)
     notify(`${entries.length} of ${imageCount} supported images matched${notes.length ? ` · ${notes.join(' · ')}` : ''}`, entries.length ? (notes.length ? 'default' : 'success') : 'error')
     return entries.length

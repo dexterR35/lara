@@ -69,7 +69,7 @@ export default function Editor() {
       {!timelineOpen && <FilePicker icon={Upload} accept=".json,.lottie,application/json,application/zip" confirm={{ title: 'Open another file?', message: `Replace ${sourceName} and discard unexported changes?`, tone: 'danger' }} onFiles={openAnother}>Open another</FilePicker>}
     </div>
     <div className={`editor-grid ${timelineOpen ? 'has-timeline' : ''}`}><LayersPanel/><Preview/></div>
-    {timelineOpen && <TimelineEditor/>}
+    {timelineOpen && <TimelineEditor key={sourceName}/>}
     {!timelineOpen && <ExportCard/>}
     {isDragActive && <div className="drop-overlay"><FolderInput size={28} aria-hidden="true"/><strong>Drop to import</strong><span>JSON opens a project · images apply as a batch</span></div>}
     <StatusToast notice={notice}/>

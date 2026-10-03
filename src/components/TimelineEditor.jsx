@@ -11,7 +11,7 @@ function rangeOptions(key, dimensionIndex, value, width, height) {
   if (key === 'o') return { min: 0, max: 100, step: 1 }
   if (key === 's') {
     const max = Math.max(300, Math.ceil(Math.abs(current) / 50) * 50 + 50)
-    return { min: 0, max, step: 1 }
+    return { min: -max, max, step: 1 }
   }
   if (key === 'r') {
     const extent = Math.max(180, Math.ceil(Math.abs(current) / 45) * 45)
@@ -36,15 +36,22 @@ function KeyframeMarkers({ keyframes, start, end, currentFrame, onSeek }) {
 function TrackRow({ definition, property, layerIndex, frame, start, end, width, height, setLayerTransform, seekFrame }) {
   const fallback = definition.fallback
   const rawValue = propertyValueAtFrame(property, frame, fallback)
-  const values = Array.isArray(rawValue) ? rawValue : [rawValue]
   const keyframes = propertyKeyframes(property)
   const hasKeyframe = keyframes.some((keyframe) => Math.abs(Number(keyframe.t) - frame) < .001)
+  // Dragging edits a local draft; committing rebuilds the preview, so it only happens on release.
+  const [draft, setDraft] = useState(null)
+  const values = draft ?? (Array.isArray(rawValue) ? rawValue : [rawValue])
 
-  const changeDimension = (dimension, nextValue) => {
-    const value = Array.isArray(rawValue) ? [...rawValue] : Number(rawValue) || 0
-    if (Array.isArray(value)) value[dimension] = Number(nextValue)
-    else setLayerTransform(layerIndex, definition.key, frame, Number(nextValue), property?.a === 1)
-    if (Array.isArray(value)) setLayerTransform(layerIndex, definition.key, frame, value, property?.a === 1)
+  const changeDimension = (dimension, nextValue) => setDraft((current) => {
+    const next = [...(current ?? values)]
+    next[dimension] = Number(nextValue)
+    return next
+  })
+
+  const commitDraft = () => {
+    if (!draft) return
+    setDraft(null)
+    setLayerTransform(layerIndex, definition.key, frame, Array.isArray(rawValue) ? draft : draft[0], property?.a === 1)
   }
 
   return <div className="timeline-property-row">
@@ -64,6 +71,9 @@ function TrackRow({ definition, property, layerIndex, frame, start, end, width, 
               step={range.step}
               value={Math.min(range.max, Math.max(range.min, value))}
               onChange={(event) => changeDimension(index, event.target.value)}
+              onPointerUp={commitDraft}
+              onKeyUp={commitDraft}
+              onBlur={commitDraft}
               aria-label={`${definition.label} ${label}`}
             />
             <output>{value}</output>
